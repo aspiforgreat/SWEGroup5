@@ -446,119 +446,76 @@ void Blocks::Block::synchBathymetryBeforeRead() {}
 
 void Blocks::Block::synchCopyLayerBeforeRead() {}
 
-
-void setLeftBoundary(){
-  // Left boundary
-  switch (boundary_[BoundaryEdge::Left]) {
-  case BoundaryType::Wall: {
-    for (int j = 1; j <= ny_; j++) {
-      h_[0][j]  = h_[1][j];
-      hu_[0][j] = -hu_[1][j];
-      hv_[0][j] = hv_[1][j];
-    };
-    break;
+void setBoundary(const BoundaryEdge& edge, const std::function<void(bool , int , int , int , int )>& updateFunction) {
+  int start;
+  int end;
+  bool leftRight = false;
+  switch (edge) {
+    case BoundaryEdge::Left:
+    case BoundaryEdge::Right:
+        leftRight = true;
+        end = ny_;
+        break;
+    case BoundaryEdge::Top:
+    case BoundaryEdge::Bottom:
+        //inccorect of course, just to understand
+        leftRight = false;
+        end = nx_;
+        break;
   }
-  case BoundaryType::Outflow: {
-    for (int j = 1; j <= ny_; j++) {
-      h_[0][j]  = h_[1][j];
-      hu_[0][j] = hu_[1][j];
-      hv_[0][j] = hv_[1][j];
-    };
+  bool negate = false;
+  switch (boundary_[edge]) {
+  case BoundaryType::Wall:
+        negate = true;
+  case BoundaryType::Outflow:
+        for (int j = 1; j <= end; j++) {
+              if (leftRight) {
+                updateFunction(negate,0, j, nx_, ny_);
+              } else {
+                updateFunction(negate,j, 0, nx_, ny_);
+              }
+        }
     break;
-  }
   case BoundaryType::Connect:
   case BoundaryType::Passive:
     break;
   default:
     assert(false);
     break;
-  };
+  }
+
+}
+
+void setLeftBoundary() {
+  setBoundary(BoundaryEdge::Left, [&](bool negate, int i, int j, int nx_, int ny_) {
+    h_[0][j]  = h_[1][j];
+    hu_[0][j] = (negate) ?  -hu_[1][j] : hu_[1][j] ;
+    hv_[0][j] = hv_[1][j];
+  });
 }
 
 void setRightBoundary() {
-  // Right boundary
-  switch (boundary_[BoundaryEdge::Right]) {
-  case BoundaryType::Wall: {
-    for (int j = 1; j <= ny_; j++) {
-      h_[nx_ + 1][j]  = h_[nx_][j];
-      hu_[nx_ + 1][j] = -hu_[nx_][j];
-      hv_[nx_ + 1][j] = hv_[nx_][j];
-    };
-    break;
-  }
-  case BoundaryType::Outflow: {
-    for (int j = 1; j <= ny_; j++) {
-      h_[nx_ + 1][j]  = h_[nx_][j];
-      hu_[nx_ + 1][j] = hu_[nx_][j];
-      hv_[nx_ + 1][j] = hv_[nx_][j];
-    };
-    break;
-  }
-  case BoundaryType::Connect:
-  case BoundaryType::Passive:
-    break;
-  default:
-    assert(false);
-    break;
-  };
+  setBoundary(BoundaryEdge::Right, [&](bool negate, int i, int j, int nx_, int ny_) {
+    h_[nx_ + 1]][j] = h_[nx_][j];
+    hu_[nx_ + 1]][j] = (negate) ? -hu_[nx_][j] : hu_[nx_][j];
+    hv_[nx_ + 1]][j] = hv_[nx_][j];
+  });
 }
 
-void setBottomBoundary(){
-  // Bottom boundary
-  switch (boundary_[BoundaryEdge::Bottom]) {
-  case BoundaryType::Wall: {
-    for (int i = 1; i <= nx_; i++) {
-      h_[i][0]  = h_[i][1];
-      hu_[i][0] = hu_[i][1];
-      hv_[i][0] = -hv_[i][1];
-    };
-    break;
-  }
-  case BoundaryType::Outflow: {
-    for (int i = 1; i <= nx_; i++) {
-      h_[i][0]  = h_[i][1];
-      hu_[i][0] = hu_[i][1];
-      hv_[i][0] = hv_[i][1];
-    };
-    break;
-  }
-  case BoundaryType::Connect:
-  case BoundaryType::Passive:
-    break;
-  default:
-    assert(false);
-    break;
-  };
+void setBottomBoundary() {
+  setBoundary(BoundaryEdge::Bottom, [&](bool negate, int i, int j, int nx_, int ny_) {
+    h_[i][0]  = h_[i][1];
+    hu_[i][0] = hu_[i][1];
+    hv_[i][0] = (negate) ? -hv_[i][1] :  hv_[i][1] ;
+  });
 }
 
 void setTopBoundary() {
-
-  // Top boundary
-  switch (boundary_[BoundaryEdge::Top]) {
-  case BoundaryType::Wall: {
-    for (int i = 1; i <= nx_; i++) {
-      h_[i][ny_ + 1]  = h_[i][ny_];
-      hu_[i][ny_ + 1] = hu_[i][ny_];
-      hv_[i][ny_ + 1] = -hv_[i][ny_];
-    };
-    break;
-  }
-  case BoundaryType::Outflow: {
-    for (int i = 1; i <= nx_; i++) {
-      h_[i][ny_ + 1]  = h_[i][ny_];
-      hu_[i][ny_ + 1] = hu_[i][ny_];
-      hv_[i][ny_ + 1] = hv_[i][ny_];
-    };
-    break;
-  }
-  case BoundaryType::Connect:
-  case BoundaryType::Passive:
-    break;
-  default:
-    assert(false);
-    break;
-  };
-
+  setBoundary(BoundaryEdge::Top, [&](bool negate, int i, int j, int nx_, int ny_ ) {
+    h_[i][ny_ + 1]  = h_[i][ny_];
+    hu_[i][ny_ + 1] = hu_[i][ny_];
+    hv_[i][ny_ + 1] = (negate) ? -hv_[i][ny_] : hv_[i][ny_];
+  });
 }
 
 void Blocks::Block::setBoundaryConditions() {

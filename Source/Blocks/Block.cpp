@@ -446,10 +446,8 @@ void Blocks::Block::synchBathymetryBeforeRead() {}
 
 void Blocks::Block::synchCopyLayerBeforeRead() {}
 
-void Blocks::Block::setBoundaryConditions() {
-  // BoundaryType::Connect conditions are set in the calling function setGhostLayer
-  // BoundaryType::Passive conditions need to be set by the component using Blocks::Block
 
+void setLeftBoundary(){
   // Left boundary
   switch (boundary_[BoundaryEdge::Left]) {
   case BoundaryType::Wall: {
@@ -475,7 +473,9 @@ void Blocks::Block::setBoundaryConditions() {
     assert(false);
     break;
   };
+}
 
+void setRightBoundary() {
   // Right boundary
   switch (boundary_[BoundaryEdge::Right]) {
   case BoundaryType::Wall: {
@@ -501,7 +501,9 @@ void Blocks::Block::setBoundaryConditions() {
     assert(false);
     break;
   };
+}
 
+void setBottomBoundary(){
   // Bottom boundary
   switch (boundary_[BoundaryEdge::Bottom]) {
   case BoundaryType::Wall: {
@@ -527,6 +529,9 @@ void Blocks::Block::setBoundaryConditions() {
     assert(false);
     break;
   };
+}
+
+void setTopBoundary() {
 
   // Top boundary
   switch (boundary_[BoundaryEdge::Top]) {
@@ -553,6 +558,18 @@ void Blocks::Block::setBoundaryConditions() {
     assert(false);
     break;
   };
+
+}
+
+void Blocks::Block::setBoundaryConditions() {
+  // BoundaryType::Connect conditions are set in the calling function setGhostLayer
+  // BoundaryType::Passive conditions need to be set by the component using Blocks::Block
+
+  setLeftBoundary();
+  setRightBoundary();
+  setBottomBoundary();
+  setTopBoundary();
+
 
   /*
    * Set values in corner ghost cells. Required for dimensional splitting and visualization.

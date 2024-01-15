@@ -45,6 +45,7 @@
 #include <limits>
 #include <memory>
 #include <type_traits>
+#incldue <omp.h>
 
 static constexpr RealType GRAVITY = 9.81f;
 
@@ -151,22 +152,22 @@ void Blocks::Block::initialiseScenario(
   offsetY_ = offsetY;
 
   // Initialize water height and discharge
-  for (int i = 1; i <= nx_; i++) {
-    for (int j = 1; j <= ny_; j++) {
+#pragma omp parallel for collapse(2)
+  for (int i = 0; i <= nx_ + 1; i++) {
+    for (int j = 0; j <= ny_ + 1; j++) {
       RealType x = offsetX + (i - RealType(0.5)) * dx_;
       RealType y = offsetY + (j - RealType(0.5)) * dy_;
-      h_[i][j]   = scenario.getWaterHeight(x, y);
-      hu_[i][j]  = scenario.getVelocityU(x, y) * h_[i][j];
-      hv_[i][j]  = scenario.getVelocityV(x, y) * h_[i][j];
+
+      if (i >= 1 && i <= nx_ && j >= 1 && j <= ny_) {
+        h_[i][j] = scenario.getWaterHeight(x, y);
+        hu_[i][j] = scenario.getVelocityU(x, y) * h_[i][j];
+        hv_[i][j] = scenario.getVelocityV(x, y) * h_[i][j];
+      }
+
+      b_[i][j] = scenario.getBathymetry(x, y);
     }
   }
 
-  // Initialize bathymetry
-  for (int i = 0; i <= nx_ + 1; i++) {
-    for (int j = 0; j <= ny_ + 1; j++) {
-      b_[i][j] = scenario.getBathymetry(offsetX + (i - RealType(0.5)) * dx_, offsetY + (j - RealType(0.5f)) * dy_);
-    }
-  }
 
   // In the case of multiple blocks the calling routine takes care about proper boundary conditions.
   if (useMultipleBlocks == false) {
@@ -182,6 +183,7 @@ void Blocks::Block::initialiseScenario(
 }
 
 void Blocks::Block::setWaterHeight(RealType (*h)(RealType, RealType)) {
+#pragma omp parallel for collapse(2)
   for (int i = 1; i <= nx_; i++) {
     for (int j = 1; j <= ny_; j++) {
       h_[i][j] = h(offsetX_ + (i - RealType(0.5)) * dx_, offsetY_ + (j - RealType(0.5)) * dy_);
@@ -192,6 +194,7 @@ void Blocks::Block::setWaterHeight(RealType (*h)(RealType, RealType)) {
 }
 
 void Blocks::Block::setDischarge(RealType (*u)(RealType, RealType), RealType (*v)(RealType, RealType)) {
+#pragma omp parallel for collapse(2)
   for (int i = 1; i <= nx_; i++) {
     for (int j = 1; j <= ny_; j++) {
       RealType x = offsetX_ + (i - RealType(0.5)) * dx_;
@@ -205,6 +208,7 @@ void Blocks::Block::setDischarge(RealType (*u)(RealType, RealType), RealType (*v
 }
 
 void Blocks::Block::setBathymetry(RealType b) {
+#pragma omp parallel for collapse(2)
   for (int i = 0; i <= nx_ + 1; i++) {
     for (int j = 0; j <= ny_ + 1; j++) {
       b_[i][j] = b;
@@ -215,6 +219,7 @@ void Blocks::Block::setBathymetry(RealType b) {
 }
 
 void Blocks::Block::setBathymetry(RealType (*b)(RealType, RealType)) {
+#pragma omp parallel for collapse(2)
   for (int i = 0; i <= nx_ + 1; i++) {
     for (int j = 0; j <= ny_ + 1; j++) {
       b_[i][j] = b(offsetX_ + (i - RealType(0.5)) * dx_, offsetY_ + (j - RealType(0.5)) * dy_);
@@ -284,11 +289,13 @@ void Blocks::Block::setBoundaryBathymetry() {
     std::memcpy(b_[nx_ + 1], b_[nx_], sizeof(RealType) * (ny_ + 2));
   }
   if (boundary_[BoundaryEdge::Bottom] == BoundaryType::Outflow || boundary_[BoundaryEdge::Bottom] == BoundaryType::Wall) {
+#pragma omp parallel for
     for (int i = 0; i <= nx_ + 1; i++) {
       b_[i][0] = b_[i][1];
     }
   }
   if (boundary_[BoundaryEdge::Top] == BoundaryType::Outflow || boundary_[BoundaryEdge::Top] == BoundaryType::Wall) {
+#pragma omp parallel for
     for (int i = 0; i <= nx_ + 1; i++) {
       b_[i][ny_ + 1] = b_[i][ny_];
     }
@@ -468,6 +475,7 @@ void setBoundary(const BoundaryEdge& edge, const std::function<void(bool , int ,
   case BoundaryType::Wall:
         negate = true;
   case BoundaryType::Outflow:
+        #pragma omp parallel for
         for (int j = 1; j <= end; j++) {
               if (leftRight) {
                 updateFunction(negate,0, j, nx_, ny_);
@@ -526,7 +534,6 @@ void Blocks::Block::setBoundaryConditions() {
   setRightBoundary();
   setBottomBoundary();
   setTopBoundary();
-
 
   /*
    * Set values in corner ghost cells. Required for dimensional splitting and visualization.

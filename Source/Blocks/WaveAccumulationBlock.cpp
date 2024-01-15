@@ -115,6 +115,7 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
 #elif defined(ENABLE_VECTORIZATION)
 #pragma omp simd reduction(max : maxWaveSpeed)
 #endif
+#pragma omp parallel for
       for (int j = 1; j < nyEnd; j++) {
         RealType maxEdgeSpeed = 0.0;
         RealType hNetUpDow = 0.0, hNetUpUpw = 0.0;
@@ -174,12 +175,14 @@ void Blocks::WaveAccumulationBlock::updateUnknowns(RealType dt) {
 #ifdef SWE_USE_OPENMP
 #pragma omp parallel for
 #endif
+#pragma omp parallel for
   for (int i = 1; i < nx_ + 1; i++) {
     const int nyEnd = ny_ + 1;
 #ifdef ENABLE_VECTORIZATION
     // Tell the compiler that he can safely ignore all dependencies in this loop
 #pragma omp simd
 #endif
+#pragma omp parallel for
     for (int j = 1; j < nyEnd; j++) {
       h_[i][j] -= dt * hNetUpdates_[i][j];
       hu_[i][j] -= dt * huNetUpdates_[i][j];

@@ -45,7 +45,8 @@
 #include <limits>
 #include <memory>
 #include <type_traits>
-#incldue <omp.h>
+#include <omp.h>
+#include <functional>
 
 static constexpr RealType GRAVITY = 9.81f;
 
@@ -453,7 +454,7 @@ void Blocks::Block::synchBathymetryBeforeRead() {}
 
 void Blocks::Block::synchCopyLayerBeforeRead() {}
 
-void setBoundary(const BoundaryEdge& edge, const std::function<void(bool , int , int , int , int )>& updateFunction) {
+void Blocks::Block::setBoundary(const BoundaryEdge& edge, const std::function<void(bool , int , int , int , int )>& updateFunction) {
   int start;
   int end;
   bool leftRight = false;
@@ -494,7 +495,7 @@ void setBoundary(const BoundaryEdge& edge, const std::function<void(bool , int ,
 
 }
 
-void setLeftBoundary() {
+void Blocks::Block::setLeftBoundary() {
   setBoundary(BoundaryEdge::Left, [&](bool negate, int i, int j, int nx_, int ny_) {
     h_[0][j]  = h_[1][j];
     hu_[0][j] = (negate) ?  -hu_[1][j] : hu_[1][j] ;
@@ -502,15 +503,15 @@ void setLeftBoundary() {
   });
 }
 
-void setRightBoundary() {
+void Blocks::Block::setRightBoundary() {
   setBoundary(BoundaryEdge::Right, [&](bool negate, int i, int j, int nx_, int ny_) {
-    h_[nx_ + 1]][j] = h_[nx_][j];
-    hu_[nx_ + 1]][j] = (negate) ? -hu_[nx_][j] : hu_[nx_][j];
-    hv_[nx_ + 1]][j] = hv_[nx_][j];
+    h_[nx_ + 1][j] = h_[nx_][j];
+    hu_[nx_ + 1][j] = (negate) ? -hu_[nx_][j] : hu_[nx_][j];
+    hv_[nx_ + 1][j] = hv_[nx_][j];
   });
 }
 
-void setBottomBoundary() {
+void Blocks::Block::setBottomBoundary() {
   setBoundary(BoundaryEdge::Bottom, [&](bool negate, int i, int j, int nx_, int ny_) {
     h_[i][0]  = h_[i][1];
     hu_[i][0] = hu_[i][1];
@@ -518,7 +519,7 @@ void setBottomBoundary() {
   });
 }
 
-void setTopBoundary() {
+void Blocks::Block::setTopBoundary() {
   setBoundary(BoundaryEdge::Top, [&](bool negate, int i, int j, int nx_, int ny_ ) {
     h_[i][ny_ + 1]  = h_[i][ny_];
     hu_[i][ny_ + 1] = hu_[i][ny_];

@@ -35,6 +35,7 @@
 #include "Scenarios/Scenario.hpp"
 #include "Tools/Float2D.hpp"
 #include "Tools/RealType.hpp"
+#include <functional> 
 
 namespace Blocks {
   /**
@@ -299,6 +300,11 @@ namespace Blocks {
      * BoundaryType::Wall or BoundaryType::Outflow).
      */
     void setBoundaryType(BoundaryEdge edge, BoundaryType boundaryType, const Block1D* inflow = nullptr);
+    void setBoundary(const BoundaryEdge& edge, const std::function<void(bool, int, int, int, int)>& updateFunction);
+    void setLeftBoundary();
+    void setRightBoundary();
+    void setBottomBoundary();
+    void setTopBoundary();
 
     /// Returns a pointer to proxy class to access the copy layer
     /**

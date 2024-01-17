@@ -35,6 +35,7 @@
 #endif
 
 #include <iostream>
+#include <omp.h>
 
 Blocks::WaveAccumulationBlock::WaveAccumulationBlock(int nx, int ny, RealType dx, RealType dy):
   Block(nx, ny, dx, dy),

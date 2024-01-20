@@ -378,6 +378,7 @@ Blocks::Block1D* Blocks::Block::grabGhostLayer(BoundaryEdge edge) {
 void Blocks::Block::setGhostLayer() {
   // std::cout << "Set simple boundary conditions " << std::endl << std::flush;
   // Call to virtual function to set ghost layer values
+
   setBoundaryConditions();
 
   // For a BoundaryType::Connect boundary, data will be copied from a neighbouring
@@ -387,56 +388,64 @@ void Blocks::Block::setGhostLayer() {
 
   // std::cout << "Set BoundaryType::Connect boundary conditions in main memory " << std::endl << std::flush;
 
-  // TODO openmp parallelize this using tasks and sections
-  bool leftRight = false;
-  int targetI = 0;
-  int targetJ = 0;
-#pragma omp parallel private(targetJ, targetI, leftRight)
-  {
-#pragma omp for
-    for (BoundaryType edge : boundary_) {
-    switch (edge) {
-    case BoundaryEdge::Left:
-      targetI   = 0;
-      leftRight = true;
-      break;
-    case BoundaryEdge::Right:
-      targetI   = nx_ + 1;
-      leftRight = true;
-      break;
-    case BoundaryEdge::Bottom:
-      targetJ   = 0;
-      leftRight = false;
-      break;
-    case BoundaryEdge::Top:
-      targetJ   = ny_ + 1;
-      leftRight = false;
-      break;
-    default:
-      break;
-    }
 
+#pragma omp parallel
+  {
+#pragma omp single nowait
+    {// Left boundary
+     if (boundary_[BoundaryEdge::Left] == BoundaryType::Connect) {
 #pragma omp task
-    {
-      if (leftRight) {
-          for (int j = 0; j <= ny_ + 1; j++) {
-            h_[targetI][j]  = neighbour_[edge]->h[j];
-            hu_[targetI][j] = neighbour_[edge]->hu[j];
-            hv_[targetI][j] = neighbour_[edge]->hv[j];
-          }
-      } else {
-          for (int i = 0; i <= nx_ + 1; i++) {
-            h_[i][targetJ]  = neighbour_[edge]->h[i];
-            hu_[i][targetJ] = neighbour_[edge]->hu[i];
-            hv_[i][targetJ] = neighbour_[edge]->hv[i];
-          }
+       {
+         for (int j = 0; j <= ny_ + 1; j++) {
+           h_[0][j]  = neighbour_[BoundaryEdge::Left]->h[j];
+          hu_[0][j] = neighbour_[BoundaryEdge::Left]->hu[j];
+          hv_[0][j] = neighbour_[BoundaryEdge::Left]->hv[j];
+        }
       }
     }
-    }
-#pragma omp taskwait
-  }
 
-  // std::cout << "Synchronize ghost layers (for heterogeneous memory) " << std::endl << std::flush;
+// Right boundary
+if (boundary_[BoundaryEdge::Right] == BoundaryType::Connect) {
+#pragma omp task
+  {
+    for (int j = 0; j <= ny_ + 1; j++) {
+    h_[nx_ + 1][j]  = neighbour_[BoundaryEdge::Right]->h[j];
+    hu_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hu[j];
+    hv_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hv[j];
+    }
+  }
+}
+
+// Bottom boundary
+if (boundary_[BoundaryEdge::Bottom] == BoundaryType::Connect) {
+#pragma omp task
+  {
+    for (int i = 0; i <= nx_ + 1; i++) {
+    h_[i][0]  = neighbour_[BoundaryEdge::Bottom]->h[i];
+    hu_[i][0] = neighbour_[BoundaryEdge::Bottom]->hu[i];
+    hv_[i][0] = neighbour_[BoundaryEdge::Bottom]->hv[i];
+    }
+  }
+}
+
+// Top boundary
+if (boundary_[BoundaryEdge::Top] == BoundaryType::Connect) {
+#pragma omp task
+  {
+    for (int i = 0; i <= nx_ + 1; i++) {
+    h_[i][ny_ + 1]  = neighbour_[BoundaryEdge::Top]->h[i];
+    hu_[i][ny_ + 1] = neighbour_[BoundaryEdge::Top]->hu[i];
+    hv_[i][ny_ + 1] = neighbour_[BoundaryEdge::Top]->hv[i];
+    }
+  }
+}
+}
+#pragma omp taskwait
+}
+
+
+
+            // std::cout << "Synchronize ghost layers (for heterogeneous memory) " << std::endl << std::flush;
   // Synchronize the ghost layers (for BoundaryType::Passive and BoundaryType::Connect conditions) with accelerator
   // memory
   synchGhostLayerAfterWrite();
@@ -592,23 +601,24 @@ void Blocks::Block::setBoundaryConditions() {
   // BoundaryType::Connect conditions are set in the calling function setGhostLayer
   // BoundaryType::Passive conditions need to be set by the component using Blocks::Block
 #pragma omp parallel
-    #pragma omp single
+  {
+      #pragma omp single
       {
-          #pragma omp task
-              setLeftBoundary();
+        #pragma omp task
+                    setLeftBoundary();
 
           #pragma omp task
-              setRightBoundary();
+                    setRightBoundary();
 
           #pragma omp task
-              setBottomBoundary();
+                    setBottomBoundary();
 
           #pragma omp task
-              setTopBoundary();
+                    setTopBoundary();
 
-          #pragma omp taskwait
+#pragma omp taskwait
       }
-
+  }
   /*
    * Set values in corner ghost cells. Required for dimensional splitting and visualization.
    *   The quantities in the corner ghost cells are chosen to generate a zero Riemann solutions

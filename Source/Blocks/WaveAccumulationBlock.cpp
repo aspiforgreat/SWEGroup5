@@ -56,7 +56,7 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
    // Compute the net-updates for the vertical edges
 #pragma omp for collapse(2) reduction(max : maxWaveSpeed)
    for (int i = 1; i < nx_ + 2; i++) {
-     for (int j = 1; j < ny_ + 1;; j++) {
+     for (int j = 1; j < ny_ + 2; j++) {
        if (j < ny_ + 1) {
 #pragma omp task shared(maxWaveSpeed)
          {

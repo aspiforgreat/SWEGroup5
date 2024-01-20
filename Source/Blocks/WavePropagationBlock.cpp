@@ -125,7 +125,7 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
   }
 
 
-  }
+
 
   if (maxWaveSpeed > 0.00001) {
     // Compute the time step width

@@ -64,54 +64,67 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
   // Maximum (linearized) wave speed within one iteration
   RealType maxWaveSpeed = RealType(0.0);
 
-  // Compute the net-updates for the vertical edges
-#pragma omp parallel for collapse(2)
-  for (int i = 1; i < nx_ + 2; i++) {
-    for (int j = 1; j < ny_ + 1; ++j) {
-      RealType maxEdgeSpeed = RealType(0.0);
+#pragma omp parallel
+  {
+// Compute the net-updates for the vertical edges
+#pragma omp for collapse(2) reduction(max : maxWaveSpeed)
+    for (int i = 1; i < nx_ + 2; i++) {
+      for (int j = 1; j < ny_ + 2; ++j) {
+        if (j < ny_ + 1) {
+          #pragma omp task shared(maxWaveSpeed)
+          {
+            RealType maxEdgeSpeed = RealType(0.0);
+            wavePropagationSolver_.computeNetUpdates(
+              h_[i - 1][j],
+              h_[i][j],
+              hu_[i - 1][j],
+              hu_[i][j],
+              b_[i - 1][j],
+              b_[i][j],
+              hNetUpdatesLeft_[i - 1][j - 1],
+              hNetUpdatesRight_[i - 1][j - 1],
+              huNetUpdatesLeft_[i - 1][j - 1],
+              huNetUpdatesRight_[i - 1][j - 1],
+              maxEdgeSpeed
+            );
 
-      wavePropagationSolver_.computeNetUpdates(
-        h_[i - 1][j],
-        h_[i][j],
-        hu_[i - 1][j],
-        hu_[i][j],
-        b_[i - 1][j],
-        b_[i][j],
-        hNetUpdatesLeft_[i - 1][j - 1],
-        hNetUpdatesRight_[i - 1][j - 1],
-        huNetUpdatesLeft_[i - 1][j - 1],
-        huNetUpdatesRight_[i - 1][j - 1],
-        maxEdgeSpeed
-      );
+            // Update the thread-local maximum wave speed
+            #pragma omp critical
+            { maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed); }
+          }
+        }
 
-      // Update the thread-local maximum wave speed
-      maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed);
+        // Compute the net-updates for the horizontal edges
+        if (i < nx_ + 1) {
+          #pragma omp task shared(maxWaveSpeed)
+          {
+            RealType maxEdgeSpeed = RealType(0.0);
+            wavePropagationSolver_.computeNetUpdates(
+              h_[i][j - 1],
+              h_[i][j],
+              hv_[i][j - 1],
+              hv_[i][j],
+              b_[i][j - 1],
+              b_[i][j],
+              hNetUpdatesBelow_[i - 1][j - 1],
+              hNetUpdatesAbove_[i - 1][j - 1],
+              hvNetUpdatesBelow_[i - 1][j - 1],
+              hvNetUpdatesAbove_[i - 1][j - 1],
+              maxEdgeSpeed
+            );
+
+            // Update the thread-local maximum wave speed
+            #pragma omp critical
+            { maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed); }
+          }
+        }
+      }
     }
+
+    #pragma omp taskwait
   }
 
-  // Compute the net-updates for the horizontal edges
-#pragma omp parallel for collapse(2)
-  for (int i = 1; i < nx_ + 1; i++) {
-    for (int j = 1; j < ny_ + 2; j++) {
-      RealType maxEdgeSpeed = RealType(0.0);
 
-      wavePropagationSolver_.computeNetUpdates(
-        h_[i][j - 1],
-        h_[i][j],
-        hv_[i][j - 1],
-        hv_[i][j],
-        b_[i][j - 1],
-        b_[i][j],
-        hNetUpdatesBelow_[i - 1][j - 1],
-        hNetUpdatesAbove_[i - 1][j - 1],
-        hvNetUpdatesBelow_[i - 1][j - 1],
-        hvNetUpdatesAbove_[i - 1][j - 1],
-        maxEdgeSpeed
-      );
-
-      // Update the thread-local maximum wave speed
-      maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed);
-    }
   }
 
   if (maxWaveSpeed > 0.00001) {
@@ -126,9 +139,10 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
   }
 }
 
-void Blocks::WavePropagationBlock::updateUnknowns(RealType dt) {
+
+  void Blocks::WavePropagationBlock::updateUnknowns(RealType dt) {
   // Update cell averages with the net-updates
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2) schedule(static)
   for (int i = 1; i < nx_ + 1; i++) {
     for (int j = 1; j < ny_ + 1; j++) {
       h_[i][j] -= dt / dx_ * (hNetUpdatesRight_[i - 1][j - 1] + hNetUpdatesLeft_[i][j - 1])

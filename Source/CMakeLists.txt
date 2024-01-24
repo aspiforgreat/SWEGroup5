@@ -20,12 +20,13 @@ if(ENABLE_SINGLE_PRECISION)
     target_compile_definitions(${META_PROJECT_NAME} PUBLIC ENABLE_SINGLE_PRECISION)
 endif()
 
-option(ENABLE_OPENMP "Enable shared-memory parallelization of intra-block iterations using OpenMP." OFF)
-if(ENABLE_OPENMP)
-    find_package(OpenMP REQUIRED)
-    target_link_libraries(${META_PROJECT_NAME} PUBLIC OpenMP::OpenMP_CXX)
-    target_compile_definitions(${META_PROJECT_NAME} PUBLIC ENABLE_OPENMP)
-endif()
+option(ENABLE_OPENMP "Enable shared-memory parallelization of intra-block iterations using OpenMP." ON)
+
+find_package(OpenMP REQUIRED)
+target_link_libraries(${META_PROJECT_NAME} PUBLIC OpenMP::OpenMP_CXX)
+target_compile_options(${META_PROJECT_NAME} PUBLIC ${OpenMP_CXX_FLAGS})
+message(STATUS "OpenMP Compiler Flags: ${OpenMP_CXX_FLAGS}")
+
 
 option(ENABLE_CUDA "Enable CUDA-accelerated SWE Blocks." OFF)
 if(ENABLE_CUDA)

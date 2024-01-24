@@ -85,6 +85,7 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
        if (i < nx_ + 1) {
 #pragma omp task shared(maxWaveSpeed)
          {
+          // printf("Hello from waveAcc %d\n", omp_get_thread_num());
            RealType maxEdgeSpeed = 0.0;
            RealType hNetUpDow = 0.0, hNetUpUpw = 0.0;
            RealType hvNetUpDow = 0.0, hvNetUpUpw = 0.0;

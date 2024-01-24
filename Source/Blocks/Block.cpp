@@ -151,13 +151,10 @@ void Blocks::Block::initialiseScenario(RealType offsetX, RealType offsetY, Scena
   offsetY_ = offsetY;
 
 // Initialize water height and discharge
-#pragma omp parallel
-  {
-    #pragma omp single
-    {
-      #pragma omp taskloop collapse(2)
+      #pragma omp parallel for schedule(static)
       for (int i = 0; i <= nx_ + 1; i++) {
         for (int j = 0; j <= ny_ + 1; j++) {
+          printf("Hello from thread %d\n", omp_get_thread_num());
           RealType x = offsetX + (i - RealType(0.5)) * dx_;
           RealType y = offsetY + (j - RealType(0.5)) * dy_;
 
@@ -170,7 +167,10 @@ void Blocks::Block::initialiseScenario(RealType offsetX, RealType offsetY, Scena
           b_[i][j] = scenario.getBathymetry(x, y);
         }
       }
-
+#pragma omp parallel
+      {
+#pragma omp single
+        {
 // Concurrently set boundary types
 #pragma omp task
       setBoundaryType(BoundaryEdge::Left, scenario.getBoundaryType(BoundaryEdge::Left));
@@ -246,6 +246,7 @@ void Blocks::Block::setBathymetry(RealType (*b)(RealType, RealType)) {
 #pragma omp parallel for collapse(2) schedule(static)
   for (int i = 0; i <= nx_ + 1; i++) {
     for (int j = 0; j <= ny_ + 1; j++) {
+       
       b_[i][j] = b(offsetX_ + (i - RealType(0.5)) * dx_, offsetY_ + (j - RealType(0.5)) * dy_);
     }
   }
@@ -305,18 +306,23 @@ void Blocks::Block::setBoundaryType(BoundaryEdge edge, BoundaryType boundaryType
 }
 
 void Blocks::Block::setBoundaryBathymetry() {
+printf("I AM ACTUALLY RUNNING \n");
 // Set bathymetry values in the ghost layer, if necessary
 #pragma omp parallel
 {
+
+     
 #pragma omp task
   {
     if (boundary_[BoundaryEdge::Left] == BoundaryType::Outflow || boundary_[BoundaryEdge::Left] == BoundaryType::Wall) {
       std::memcpy(b_[0], b_[1], sizeof(RealType) * (ny_ + 2));
     }
+     
   }
 
 #pragma omp task
   {
+     
     if (boundary_[BoundaryEdge::Right] == BoundaryType::Outflow || boundary_[BoundaryEdge::Right] == BoundaryType::Wall) {
       std::memcpy(b_[nx_ + 1], b_[nx_], sizeof(RealType) * (ny_ + 2));
     }
@@ -325,6 +331,7 @@ void Blocks::Block::setBoundaryBathymetry() {
 
 #pragma omp for schedule(dynamic)
   for (int i = 0; i <= nx_ + 1; i++) {
+     
     if (boundary_[BoundaryEdge::Bottom] == BoundaryType::Outflow || boundary_[BoundaryEdge::Bottom] == BoundaryType::Wall) {
       b_[i][0] = b_[i][1];
     }
@@ -396,6 +403,7 @@ void Blocks::Block::setGhostLayer() {
      if (boundary_[BoundaryEdge::Left] == BoundaryType::Connect) {
 #pragma omp task
        {
+         printf("Hello from thread %d\n", omp_get_thread_num());
          for (int j = 0; j <= ny_ + 1; j++) {
            h_[0][j]  = neighbour_[BoundaryEdge::Left]->h[j];
           hu_[0][j] = neighbour_[BoundaryEdge::Left]->hu[j];
@@ -408,6 +416,7 @@ void Blocks::Block::setGhostLayer() {
 if (boundary_[BoundaryEdge::Right] == BoundaryType::Connect) {
 #pragma omp task
   {
+          printf("Hello from thread %d\n", omp_get_thread_num());
     for (int j = 0; j <= ny_ + 1; j++) {
     h_[nx_ + 1][j]  = neighbour_[BoundaryEdge::Right]->h[j];
     hu_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hu[j];
@@ -460,6 +469,7 @@ void Blocks::Block::computeMaxTimeStep(const RealType dryTol, const RealType cfl
   for (int i = 1; i <= nx_; i++) {
     for (int j = 1; j <= ny_; j++) {
       if (h_[i][j] > dryTol) {
+
         RealType momentum = std::max(std::abs(hu_[i][j]), std::abs(hv_[i][j]));
 
         RealType particleVelocity = momentum / h_[i][j];
@@ -535,23 +545,17 @@ void Blocks::Block::setBoundary(const BoundaryEdge& edge, const std::function<vo
         negate = true;
     case BoundaryType::Outflow:
         #pragma omp parallel
-          {
-              #pragma omp single
-              {
-                    #pragma omp for schedule(dynamic)
-                    for (int j = 1; j <= end; j++) {
-                      #pragma omp task
-                      {
-                        if (leftRight) {
-                          updateFunction(negate, 0, j, nx_, ny_);
-                        } else {
-                          updateFunction(negate, j, 0, nx_, ny_);
-                        }
-                      }
-                    }
-              }
-              #pragma omp taskwait
-          }
+        {
+            #pragma omp taskloop if(end > 10) grainsize(2) nogroup
+            for (int j = 1; j <= end; j++) {
+       
+                if (leftRight) {
+                  updateFunction(negate, 0, j, nx_, ny_);
+                } else {
+                  updateFunction(negate, j, 0, nx_, ny_);
+                }
+            }
+        }
     break;
 
 

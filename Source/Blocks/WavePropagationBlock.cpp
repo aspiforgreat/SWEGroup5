@@ -70,6 +70,7 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
 #pragma omp for collapse(2) reduction(max : maxWaveSpeed)
     for (int i = 1; i < nx_ + 2; i++) {
       for (int j = 1; j < ny_ + 2; ++j) {
+        // printf("Hello from waveprog %d\n", omp_get_thread_num());
         if (j < ny_ + 1) {
           #pragma omp task shared(maxWaveSpeed)
           {

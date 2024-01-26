@@ -154,7 +154,6 @@ void Blocks::Block::initialiseScenario(RealType offsetX, RealType offsetY, Scena
       #pragma omp parallel for schedule(static)
       for (int i = 0; i <= nx_ + 1; i++) {
         for (int j = 0; j <= ny_ + 1; j++) {
-          printf("Hello from thread %d\n", omp_get_thread_num());
           RealType x = offsetX + (i - RealType(0.5)) * dx_;
           RealType y = offsetY + (j - RealType(0.5)) * dy_;
 
@@ -205,7 +204,7 @@ void Blocks::Block::setWaterHeight(RealType (*h)(RealType, RealType)) {
         }
       }
     }
-#pragma omp taskwait
+
 }
 
 
@@ -306,28 +305,28 @@ void Blocks::Block::setBoundaryType(BoundaryEdge edge, BoundaryType boundaryType
 }
 
 void Blocks::Block::setBoundaryBathymetry() {
-printf("I AM ACTUALLY RUNNING \n");
+
 // Set bathymetry values in the ghost layer, if necessary
 #pragma omp parallel
 {
-
-     
-#pragma omp task
-  {
-    if (boundary_[BoundaryEdge::Left] == BoundaryType::Outflow || boundary_[BoundaryEdge::Left] == BoundaryType::Wall) {
-      std::memcpy(b_[0], b_[1], sizeof(RealType) * (ny_ + 2));
-    }
-     
-  }
+#pragma omp single
+    {
 
 #pragma omp task
-  {
-     
-    if (boundary_[BoundaryEdge::Right] == BoundaryType::Outflow || boundary_[BoundaryEdge::Right] == BoundaryType::Wall) {
-      std::memcpy(b_[nx_ + 1], b_[nx_], sizeof(RealType) * (ny_ + 2));
+      {
+        if (boundary_[BoundaryEdge::Left] == BoundaryType::Outflow || boundary_[BoundaryEdge::Left] == BoundaryType::Wall) {
+          std::memcpy(b_[0], b_[1], sizeof(RealType) * (ny_ + 2));
+        }
+      }
+
+#pragma omp task
+      {
+
+        if (boundary_[BoundaryEdge::Right] == BoundaryType::Outflow || boundary_[BoundaryEdge::Right] == BoundaryType::Wall) {
+          std::memcpy(b_[nx_ + 1], b_[nx_], sizeof(RealType) * (ny_ + 2));
+        }
+      }
     }
-  }
-#pragma omp taskwait
 
 #pragma omp for schedule(dynamic)
   for (int i = 0; i <= nx_ + 1; i++) {
@@ -339,8 +338,6 @@ printf("I AM ACTUALLY RUNNING \n");
       b_[i][ny_ + 1] = b_[i][ny_];
     }
   }
-
-#pragma omp taskwait
 
   // Set corner values
   b_[0][0]             = b_[1][1];
@@ -449,7 +446,7 @@ if (boundary_[BoundaryEdge::Top] == BoundaryType::Connect) {
   }
 }
 }
-#pragma omp taskwait
+
 }
 
 
@@ -620,7 +617,6 @@ void Blocks::Block::setBoundaryConditions() {
           #pragma omp task
                     setTopBoundary();
 
-#pragma omp taskwait
       }
   }
   /*

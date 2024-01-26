@@ -54,37 +54,30 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
 #pragma omp parallel
    {
    // Compute the net-updates for the vertical edges
-#pragma omp for collapse(2) reduction(max : maxWaveSpeed)
+#pragma omp for reduction(max : maxWaveSpeed)
    for (int i = 1; i < nx_ + 2; i++) {
      for (int j = 1; j < ny_ + 2; j++) {
        if (j < ny_ + 1) {
-#pragma omp task shared(maxWaveSpeed)
-         {
-           RealType maxEdgeSpeed = RealType(0.0);
-           RealType hNetUpLeft = 0.0, hNetUpRight = 0.0;
-           RealType huNetUpLeft = 0.0, huNetUpRight = 0.0;
-           wavePropagationSolver_.computeNetUpdates(
-             h_[i - 1][j], h_[i][j], hu_[i - 1][j], hu_[i][j], b_[i - 1][j], b_[i][j], hNetUpLeft, hNetUpRight, huNetUpLeft, huNetUpRight, maxEdgeSpeed
-           );
+         RealType maxEdgeSpeed = RealType(0.0);
+         RealType hNetUpLeft = 0.0, hNetUpRight = 0.0;
+         RealType huNetUpLeft = 0.0, huNetUpRight = 0.0;
+         wavePropagationSolver_.computeNetUpdates(
+           h_[i - 1][j], h_[i][j], hu_[i - 1][j], hu_[i][j], b_[i - 1][j], b_[i][j], hNetUpLeft, hNetUpRight, huNetUpLeft, huNetUpRight, maxEdgeSpeed
+         );
 
-           // Accumulate net updates to cell-wise net updates for h and hu
-           hNetUpdates_[i - 1][j] += dxInv * hNetUpLeft;
-           huNetUpdates_[i - 1][j] += dxInv * huNetUpLeft;
-           hNetUpdates_[i][j] += dxInv * hNetUpRight;
-           huNetUpdates_[i][j] += dxInv * huNetUpRight;
+         // Accumulate net updates to cell-wise net updates for h and hu
+         hNetUpdates_[i - 1][j] += dxInv * hNetUpLeft;
+         huNetUpdates_[i - 1][j] += dxInv * huNetUpLeft;
+         hNetUpdates_[i][j] += dxInv * hNetUpRight;
+         huNetUpdates_[i][j] += dxInv * huNetUpRight;
 
 
-           // Update the maximum wave speed
-#pragma omp critical
-           { maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed); }
-         };
+         // Update the maximum wave speed
+         maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed);
        }
-
        // Compute the net-updates for the horizontal edges
 
        if (i < nx_ + 1) {
-#pragma omp task shared(maxWaveSpeed)
-         {
           // printf("Hello from waveAcc %d\n", omp_get_thread_num());
            RealType maxEdgeSpeed = 0.0;
            RealType hNetUpDow = 0.0, hNetUpUpw = 0.0;
@@ -98,13 +91,11 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
            hNetUpdates_[i][j] += dyInv * hNetUpUpw;
            hvNetUpdates_[i][j] += dyInv * hvNetUpUpw;
            // Update the thread-local maximum wave speed
-        #pragma omp critical
-           { maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed); }
+           maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed);
          }
        }
      }
-   }
-    #pragma omp taskwait
+
    }
 
  if (maxWaveSpeed > 0.00001) {

@@ -67,13 +67,11 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
 #pragma omp parallel
   {
 // Compute the net-updates for the vertical edges
-#pragma omp for collapse(2) reduction(max : maxWaveSpeed)
+#pragma omp for reduction(max : maxWaveSpeed)
     for (int i = 1; i < nx_ + 2; i++) {
       for (int j = 1; j < ny_ + 2; ++j) {
         // printf("Hello from waveprog %d\n", omp_get_thread_num());
         if (j < ny_ + 1) {
-          #pragma omp task shared(maxWaveSpeed)
-          {
             RealType maxEdgeSpeed = RealType(0.0);
             wavePropagationSolver_.computeNetUpdates(
               h_[i - 1][j],
@@ -90,15 +88,12 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
             );
 
             // Update the thread-local maximum wave speed
-            #pragma omp critical
-            { maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed); }
-          }
+            maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed);
+
         }
 
         // Compute the net-updates for the horizontal edges
         if (i < nx_ + 1) {
-          #pragma omp task shared(maxWaveSpeed)
-          {
             RealType maxEdgeSpeed = RealType(0.0);
             wavePropagationSolver_.computeNetUpdates(
               h_[i][j - 1],
@@ -115,15 +110,14 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
             );
 
             // Update the thread-local maximum wave speed
-            #pragma omp critical
-            { maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed); }
+            maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed);
           }
         }
+
       }
     }
 
-    #pragma omp taskwait
-  }
+
 
 
 

@@ -337,6 +337,7 @@ Blocks::Block1D* Blocks::Block::grabGhostLayer(BoundaryEdge edge) {
  return nullptr;
 }
 
+// this is the function that calls all the other functions
 void Blocks::Block::setGhostLayer() {
  // std::cout << "Set simple boundary conditions " << std::endl << std::flush;
  // Call to virtual function to set ghost layer values
@@ -353,8 +354,6 @@ void Blocks::Block::setGhostLayer() {
 
  // Left boundary
  if (boundary_[BoundaryEdge::Left] == BoundaryType::Connect) {
-
-   printf("Hello from thread %d\n", omp_get_thread_num());
    for (int j = 0; j <= ny_ + 1; j++) {
      h_[0][j]  = neighbour_[BoundaryEdge::Left]->h[j];
      hu_[0][j] = neighbour_[BoundaryEdge::Left]->hu[j];
@@ -365,7 +364,6 @@ void Blocks::Block::setGhostLayer() {
  // Right boundary
  if (boundary_[BoundaryEdge::Right] == BoundaryType::Connect) {
 
-   printf("Hello from thread %d\n", omp_get_thread_num());
    for (int j = 0; j <= ny_ + 1; j++) {
      h_[nx_ + 1][j]  = neighbour_[BoundaryEdge::Right]->h[j];
      hu_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hu[j];

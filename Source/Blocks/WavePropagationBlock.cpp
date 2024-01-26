@@ -64,7 +64,6 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
  // Maximum (linearized) wave speed within one iteration
  RealType maxWaveSpeed = RealType(0.0);
 
-
  // Compute the net-updates for the vertical edges
  for (int i = 1; i < nx_ + 2; i++) {
    for (int j = 1; j < ny_ + 2; ++j) {
@@ -113,12 +112,6 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
    }
 
  }
-
-
-
-
-
-
 
  if (maxWaveSpeed > 0.00001) {
    // Compute the time step width

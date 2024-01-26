@@ -154,7 +154,6 @@ void Blocks::Block::initialiseScenario(RealType offsetX, RealType offsetY, Scena
 #pragma omp parallel for schedule(static)
  for (int i = 0; i <= nx_ + 1; i++) {
    for (int j = 0; j <= ny_ + 1; j++) {
-     printf("Hello from thread %d\n", omp_get_thread_num());
      RealType x = offsetX + (i - RealType(0.5)) * dx_;
      RealType y = offsetY + (j - RealType(0.5)) * dy_;
 
@@ -215,14 +214,13 @@ synchWaterHeightAfterWrite();
 // TODO find out if anyone uses this method
 void Blocks::Block::setDischarge(RealType (*u)(RealType, RealType), RealType (*v)(RealType, RealType)) {
 // TODO TASK
-#pragma omp parallel for collapse(2) schedule(static)
  for (int i = 1; i <= nx_; i++) {
    for (int j = 1; j <= ny_; j++) {
      RealType x = offsetX_ + (i - RealType(0.5)) * dx_;
      RealType y = offsetY_ + (j - RealType(0.5)) * dy_;
      hu_[i][j]  = u(x, y) * h_[i][j];
-     hv_[i][j]  = v(x, y) * h_[i][j];
-   };
+     hv_[i][j]  = v(x, y) * h_[i][j];x
+   }
  }
 
  synchDischargeAfterWrite();
@@ -306,11 +304,11 @@ void Blocks::Block::setBoundaryType(BoundaryEdge edge, BoundaryType boundaryType
 }
 
 void Blocks::Block::setBoundaryBathymetry() {
- printf("I AM ACTUALLY RUNNING \n");
 // Set bathymetry values in the ghost layer, if necessary
 #pragma omp parallel
  {
-
+#pragma omp single
+   {
 
 #pragma omp task
    {
@@ -338,6 +336,7 @@ void Blocks::Block::setBoundaryBathymetry() {
      if (boundary_[BoundaryEdge::Top] == BoundaryType::Outflow || boundary_[BoundaryEdge::Top] == BoundaryType::Wall) {
        b_[i][ny_ + 1] = b_[i][ny_];
      }
+   }
    }
 
 #pragma omp taskwait
@@ -403,7 +402,7 @@ void Blocks::Block::setGhostLayer() {
     if (boundary_[BoundaryEdge::Left] == BoundaryType::Connect) {
 #pragma omp task
       {
-        printf("Hello from thread %d\n", omp_get_thread_num());
+
  for (int j = 0; j <= ny_ + 1; j++) {
    h_[0][j]  = neighbour_[BoundaryEdge::Left]->h[j];
    hu_[0][j] = neighbour_[BoundaryEdge::Left]->hu[j];
@@ -416,7 +415,6 @@ void Blocks::Block::setGhostLayer() {
 if (boundary_[BoundaryEdge::Right] == BoundaryType::Connect) {
 #pragma omp task
  {
-   printf("Hello from thread %d\n", omp_get_thread_num());
    for (int j = 0; j <= ny_ + 1; j++) {
      h_[nx_ + 1][j]  = neighbour_[BoundaryEdge::Right]->h[j];
      hu_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hu[j];

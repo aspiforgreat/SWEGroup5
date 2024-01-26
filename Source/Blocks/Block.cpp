@@ -139,8 +139,9 @@ Blocks::Block::Block(int nx, int ny, RealType dx, RealType dy, Tools::Float2D<Re
 void Blocks::Block::initialiseScenario(RealType offsetX, RealType offsetY, Scenarios::Scenario& scenario, const bool useMultipleBlocks) {
   offsetX_ = offsetX;
   offsetY_ = offsetY;
-  // TODO THIS FUNCTION NEEDS TO PARALLELIZED
+
   // Initialize water height and discharge
+#pragma omp parallel for collapse(2)
   for (int i = 0; i <= nx_ + 1; i++) {
     for (int j = 0; j <= ny_ + 1; j++) {
       RealType x = offsetX + (i - RealType(0.5)) * dx_;
@@ -203,7 +204,7 @@ void Blocks::Block::setDischarge(RealType (*u)(RealType, RealType), RealType (*v
   synchDischargeAfterWrite();
 }
 
-// TODO this method and the one below are not used anywhere, find out if they are needed
+
 void Blocks::Block::setBathymetry(RealType b) {
   for (int i = 0; i <= nx_ + 1; i++) {
     for (int j = 0; j <= ny_ + 1; j++) {
@@ -482,6 +483,7 @@ void Blocks::Block::setBoundary(const BoundaryEdge& edge, const std::function<vo
   case BoundaryType::Wall:
     negate = true;
   case BoundaryType::Outflow:
+    // TODO THSI WAS PARALLEL
     for (int j = 1; j <= end; j++) {
 
       if (leftRight) {
@@ -540,16 +542,23 @@ void Blocks::Block::setBoundaryConditions() {
   // BoundaryType::Passive conditions need to be set by the component using Blocks::Block
 
 
-  setLeftBoundary();
+#pragma omp parallel
+  {
+#pragma omp single
+    {
+#pragma omp task
+      setLeftBoundary();
 
+#pragma omp task
+      setRightBoundary();
 
-  setRightBoundary();
+#pragma omp task
+      setBottomBoundary();
 
-
-  setBottomBoundary();
-
-
-  setTopBoundary();
+#pragma omp task
+      setTopBoundary();
+    }
+  }
 
   /*
    * Set values in corner ghost cells. Required for dimensional splitting and visualization.

@@ -53,6 +53,7 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
    RealType maxWaveSpeedLocal = RealType(0.0);
 
    // Compute the net-updates for the vertical edges
+#pragma omp parallel for reduction(max:maxWaveSpeed)
    for (int i = 1; i < nx_ + 2; i++) {
      for (int j = 1; j < ny_ + 2; j++) {
        if (j < ny_ + 1) {
@@ -93,7 +94,6 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
          }
        }
      }
-
 
 
  if (maxWaveSpeed > 0.00001) {

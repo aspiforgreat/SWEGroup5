@@ -64,10 +64,8 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
   // Maximum (linearized) wave speed within one iteration
   RealType maxWaveSpeed = RealType(0.0);
 
-#pragma omp parallel
-  {
+
 // Compute the net-updates for the vertical edges
-#pragma omp for reduction(max : maxWaveSpeed)
     for (int i = 1; i < nx_ + 2; i++) {
       for (int j = 1; j < ny_ + 2; ++j) {
         // printf("Hello from waveprog %d\n", omp_get_thread_num());
@@ -115,7 +113,7 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
         }
 
       }
-    }
+
 
 
 
@@ -137,7 +135,6 @@ void Blocks::WavePropagationBlock::computeNumericalFluxes() {
 
   void Blocks::WavePropagationBlock::updateUnknowns(RealType dt) {
   // Update cell averages with the net-updates
-#pragma omp parallel for collapse(2) schedule(static)
   for (int i = 1; i < nx_ + 1; i++) {
     for (int j = 1; j < ny_ + 1; j++) {
       h_[i][j] -= dt / dx_ * (hNetUpdatesRight_[i - 1][j - 1] + hNetUpdatesLeft_[i][j - 1])

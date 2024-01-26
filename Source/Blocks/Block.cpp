@@ -41,18 +41,16 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <memory>
-#include <type_traits>
 #include <omp.h>
-#include <functional>
+#include <type_traits>
 
 static constexpr RealType GRAVITY = 9.81f;
 
-Blocks::Block1D::Block1D(
-  const Tools::Float1D<RealType>& h_, const Tools::Float1D<RealType>& hu_, const Tools::Float1D<RealType>& hv_
-):
+Blocks::Block1D::Block1D(const Tools::Float1D<RealType>& h_, const Tools::Float1D<RealType>& hu_, const Tools::Float1D<RealType>& hv_):
   h(h_),
   hu(hu_),
   hv(hv_){};
@@ -83,11 +81,7 @@ Blocks::Block* Blocks::Block::getBlockInstance(int nx, int ny, RealType dx, Real
   return block;
 }
 
-Blocks::Block* Blocks::Block::getBlockInstance(
-  int nx, int ny, RealType dx, RealType dy,
-  Tools::Float2D<RealType>& h,
-  Tools::Float2D<RealType>& hu,
-  Tools::Float2D<RealType>& hv) {
+Blocks::Block* Blocks::Block::getBlockInstance(int nx, int ny, RealType dx, RealType dy, Tools::Float2D<RealType>& h, Tools::Float2D<RealType>& hu, Tools::Float2D<RealType>& hv) {
   Block* block = nullptr;
 #if !defined(ENABLE_CUDA)
 #if defined(WITH_SOLVER_FWAVE) || defined(WITH_SOLVER_AUGRIE) || defined(WITH_SOLVER_HLLE)
@@ -123,11 +117,7 @@ Blocks::Block::Block(int nx, int ny, RealType dx, RealType dy):
   }
 }
 
-Blocks::Block::Block(
-  int nx, int ny, RealType dx, RealType dy,
-  Tools::Float2D<RealType>& h,
-  Tools::Float2D<RealType>& hu,
-  Tools::Float2D<RealType>& hv):
+Blocks::Block::Block(int nx, int ny, RealType dx, RealType dy, Tools::Float2D<RealType>& h, Tools::Float2D<RealType>& hu, Tools::Float2D<RealType>& hv):
   nx_(nx),
   ny_(ny),
   dx_(dx),
@@ -149,41 +139,37 @@ Blocks::Block::Block(
 void Blocks::Block::initialiseScenario(RealType offsetX, RealType offsetY, Scenarios::Scenario& scenario, const bool useMultipleBlocks) {
   offsetX_ = offsetX;
   offsetY_ = offsetY;
+  // TODO THIS FUNCTION NEEDS TO PARALLELIZED
+  // Initialize water height and discharge
+  for (int i = 0; i <= nx_ + 1; i++) {
+    for (int j = 0; j <= ny_ + 1; j++) {
+      RealType x = offsetX + (i - RealType(0.5)) * dx_;
+      RealType y = offsetY + (j - RealType(0.5)) * dy_;
 
-// Initialize water height and discharge
-      #pragma omp parallel for schedule(static)
-      for (int i = 0; i <= nx_ + 1; i++) {
-        for (int j = 0; j <= ny_ + 1; j++) {
-          RealType x = offsetX + (i - RealType(0.5)) * dx_;
-          RealType y = offsetY + (j - RealType(0.5)) * dy_;
-
-          if (i >= 1 && i <= nx_ && j >= 1 && j <= ny_) {
-            h_[i][j]  = scenario.getWaterHeight(x, y);
-            hu_[i][j] = scenario.getVelocityU(x, y) * h_[i][j];
-            hv_[i][j] = scenario.getVelocityV(x, y) * h_[i][j];
-          }
-
-          b_[i][j] = scenario.getBathymetry(x, y);
-        }
+      if (i >= 1 && i <= nx_ && j >= 1 && j <= ny_) {
+        h_[i][j]  = scenario.getWaterHeight(x, y);
+        hu_[i][j] = scenario.getVelocityU(x, y) * h_[i][j];
+        hv_[i][j] = scenario.getVelocityV(x, y) * h_[i][j];
       }
-#pragma omp parallel
-      {
-#pragma omp single
-        {
-// Concurrently set boundary types
-#pragma omp task
-      setBoundaryType(BoundaryEdge::Left, scenario.getBoundaryType(BoundaryEdge::Left));
 
-#pragma omp task
-      setBoundaryType(BoundaryEdge::Right, scenario.getBoundaryType(BoundaryEdge::Right));
-
-#pragma omp task
-      setBoundaryType(BoundaryEdge::Bottom, scenario.getBoundaryType(BoundaryEdge::Bottom));
-
-#pragma omp task
-      setBoundaryType(BoundaryEdge::Top, scenario.getBoundaryType(BoundaryEdge::Top));
+      b_[i][j] = scenario.getBathymetry(x, y);
     }
   }
+
+
+  // Concurrently set boundary types
+
+  setBoundaryType(BoundaryEdge::Left, scenario.getBoundaryType(BoundaryEdge::Left));
+
+
+  setBoundaryType(BoundaryEdge::Right, scenario.getBoundaryType(BoundaryEdge::Right));
+
+
+  setBoundaryType(BoundaryEdge::Bottom, scenario.getBoundaryType(BoundaryEdge::Bottom));
+
+
+  setBoundaryType(BoundaryEdge::Top, scenario.getBoundaryType(BoundaryEdge::Top));
+
 
   // Perform update after external write to variables
 
@@ -192,29 +178,19 @@ void Blocks::Block::initialiseScenario(RealType offsetX, RealType offsetY, Scena
 
 
 void Blocks::Block::setWaterHeight(RealType (*h)(RealType, RealType)) {
-#pragma omp parallel
-  {
-#pragma omp single
-    {
-#pragma omp taskloop collapse(2)
-      for (int i = 1; i <= nx_; i++) {
-        for (int j = 1; j <= ny_; j++) {
-          // Calculate the height of the cell using the h function
-          h_[i][j] = h(offsetX_ + (i - RealType(0.5)) * dx_, offsetY_ + (j - RealType(0.5)) * dy_);
-        }
-      }
+  for (int i = 1; i <= nx_; i++) {
+    for (int j = 1; j <= ny_; j++) {
+      // Calculate the height of the cell using the h function
+      h_[i][j] = h(offsetX_ + (i - RealType(0.5)) * dx_, offsetY_ + (j - RealType(0.5)) * dy_);
     }
-
-}
+  }
 
 
   synchWaterHeightAfterWrite();
 }
 
-// TODO find out if anyone uses this method
+
 void Blocks::Block::setDischarge(RealType (*u)(RealType, RealType), RealType (*v)(RealType, RealType)) {
-// TODO TASK
-#pragma omp parallel for collapse(2) schedule(static)
   for (int i = 1; i <= nx_; i++) {
     for (int j = 1; j <= ny_; j++) {
       RealType x = offsetX_ + (i - RealType(0.5)) * dx_;
@@ -229,8 +205,6 @@ void Blocks::Block::setDischarge(RealType (*u)(RealType, RealType), RealType (*v
 
 // TODO this method and the one below are not used anywhere, find out if they are needed
 void Blocks::Block::setBathymetry(RealType b) {
-  // TODO TASK
-#pragma omp parallel for collapse(2) schedule(static)
   for (int i = 0; i <= nx_ + 1; i++) {
     for (int j = 0; j <= ny_ + 1; j++) {
       b_[i][j] = b;
@@ -241,11 +215,9 @@ void Blocks::Block::setBathymetry(RealType b) {
 }
 
 void Blocks::Block::setBathymetry(RealType (*b)(RealType, RealType)) {
-  // TODO TASK
-#pragma omp parallel for collapse(2) schedule(static)
   for (int i = 0; i <= nx_ + 1; i++) {
     for (int j = 0; j <= ny_ + 1; j++) {
-       
+
       b_[i][j] = b(offsetX_ + (i - RealType(0.5)) * dx_, offsetY_ + (j - RealType(0.5)) * dy_);
     }
   }
@@ -306,31 +278,17 @@ void Blocks::Block::setBoundaryType(BoundaryEdge edge, BoundaryType boundaryType
 
 void Blocks::Block::setBoundaryBathymetry() {
 
-// Set bathymetry values in the ghost layer, if necessary
-#pragma omp parallel
-{
-#pragma omp single
-    {
+  // Set bathymetry values in the ghost layer, if necessary
+  if (boundary_[BoundaryEdge::Left] == BoundaryType::Outflow || boundary_[BoundaryEdge::Left] == BoundaryType::Wall) {
+    std::memcpy(b_[0], b_[1], sizeof(RealType) * (ny_ + 2));
+  }
 
-#pragma omp task
-      {
-        if (boundary_[BoundaryEdge::Left] == BoundaryType::Outflow || boundary_[BoundaryEdge::Left] == BoundaryType::Wall) {
-          std::memcpy(b_[0], b_[1], sizeof(RealType) * (ny_ + 2));
-        }
-      }
+  if (boundary_[BoundaryEdge::Right] == BoundaryType::Outflow || boundary_[BoundaryEdge::Right] == BoundaryType::Wall) {
+    std::memcpy(b_[nx_ + 1], b_[nx_], sizeof(RealType) * (ny_ + 2));
+  }
 
-#pragma omp task
-      {
-
-        if (boundary_[BoundaryEdge::Right] == BoundaryType::Outflow || boundary_[BoundaryEdge::Right] == BoundaryType::Wall) {
-          std::memcpy(b_[nx_ + 1], b_[nx_], sizeof(RealType) * (ny_ + 2));
-        }
-      }
-    }
-
-#pragma omp for schedule(dynamic)
   for (int i = 0; i <= nx_ + 1; i++) {
-     
+
     if (boundary_[BoundaryEdge::Bottom] == BoundaryType::Outflow || boundary_[BoundaryEdge::Bottom] == BoundaryType::Wall) {
       b_[i][0] = b_[i][1];
     }
@@ -348,21 +306,21 @@ void Blocks::Block::setBoundaryBathymetry() {
   // Synchronize after an external update of the bathymetry
   synchBathymetryAfterWrite();
 }
-}
 
-  Blocks::Block1D* Blocks::Block::registerCopyLayer(BoundaryEdge edge) {
-    switch (edge) {
-    case BoundaryEdge::Left:
-      return new Block1D(h_.getColProxy(1), hu_.getColProxy(1), hv_.getColProxy(1));
-    case BoundaryEdge::Right:
-      return new Block1D(h_.getColProxy(nx_), hu_.getColProxy(nx_), hv_.getColProxy(nx_));
-    case BoundaryEdge::Bottom:
-      return new Block1D(h_.getRowProxy(1), hu_.getRowProxy(1), hv_.getRowProxy(1));
-    case BoundaryEdge::Top:
-      return new Block1D(h_.getRowProxy(ny_), hu_.getRowProxy(ny_), hv_.getRowProxy(ny_));
-    };
-    return nullptr;
-  }
+
+Blocks::Block1D* Blocks::Block::registerCopyLayer(BoundaryEdge edge) {
+  switch (edge) {
+  case BoundaryEdge::Left:
+    return new Block1D(h_.getColProxy(1), hu_.getColProxy(1), hv_.getColProxy(1));
+  case BoundaryEdge::Right:
+    return new Block1D(h_.getColProxy(nx_), hu_.getColProxy(nx_), hv_.getColProxy(nx_));
+  case BoundaryEdge::Bottom:
+    return new Block1D(h_.getRowProxy(1), hu_.getRowProxy(1), hv_.getRowProxy(1));
+  case BoundaryEdge::Top:
+    return new Block1D(h_.getRowProxy(ny_), hu_.getRowProxy(ny_), hv_.getRowProxy(ny_));
+  };
+  return nullptr;
+}
 
 Blocks::Block1D* Blocks::Block::grabGhostLayer(BoundaryEdge edge) {
   boundary_[edge] = BoundaryType::Passive;
@@ -393,65 +351,49 @@ void Blocks::Block::setGhostLayer() {
   // std::cout << "Set BoundaryType::Connect boundary conditions in main memory " << std::endl << std::flush;
 
 
-#pragma omp parallel
-  {
-#pragma omp single nowait
-    {// Left boundary
-     if (boundary_[BoundaryEdge::Left] == BoundaryType::Connect) {
-#pragma omp task
-       {
-         printf("Hello from thread %d\n", omp_get_thread_num());
-         for (int j = 0; j <= ny_ + 1; j++) {
-           h_[0][j]  = neighbour_[BoundaryEdge::Left]->h[j];
-          hu_[0][j] = neighbour_[BoundaryEdge::Left]->hu[j];
-          hv_[0][j] = neighbour_[BoundaryEdge::Left]->hv[j];
-        }
-      }
-    }
+  // Left boundary
+  if (boundary_[BoundaryEdge::Left] == BoundaryType::Connect) {
 
-// Right boundary
-if (boundary_[BoundaryEdge::Right] == BoundaryType::Connect) {
-#pragma omp task
-  {
-          printf("Hello from thread %d\n", omp_get_thread_num());
+    printf("Hello from thread %d\n", omp_get_thread_num());
     for (int j = 0; j <= ny_ + 1; j++) {
-    h_[nx_ + 1][j]  = neighbour_[BoundaryEdge::Right]->h[j];
-    hu_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hu[j];
-    hv_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hv[j];
+      h_[0][j]  = neighbour_[BoundaryEdge::Left]->h[j];
+      hu_[0][j] = neighbour_[BoundaryEdge::Left]->hu[j];
+      hv_[0][j] = neighbour_[BoundaryEdge::Left]->hv[j];
     }
   }
-}
 
-// Bottom boundary
-if (boundary_[BoundaryEdge::Bottom] == BoundaryType::Connect) {
-#pragma omp task
-  {
+  // Right boundary
+  if (boundary_[BoundaryEdge::Right] == BoundaryType::Connect) {
+
+    printf("Hello from thread %d\n", omp_get_thread_num());
+    for (int j = 0; j <= ny_ + 1; j++) {
+      h_[nx_ + 1][j]  = neighbour_[BoundaryEdge::Right]->h[j];
+      hu_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hu[j];
+      hv_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hv[j];
+    }
+  }
+
+  // Bottom boundary
+  if (boundary_[BoundaryEdge::Bottom] == BoundaryType::Connect) {
     for (int i = 0; i <= nx_ + 1; i++) {
-    h_[i][0]  = neighbour_[BoundaryEdge::Bottom]->h[i];
-    hu_[i][0] = neighbour_[BoundaryEdge::Bottom]->hu[i];
-    hv_[i][0] = neighbour_[BoundaryEdge::Bottom]->hv[i];
+      h_[i][0]  = neighbour_[BoundaryEdge::Bottom]->h[i];
+      hu_[i][0] = neighbour_[BoundaryEdge::Bottom]->hu[i];
+      hv_[i][0] = neighbour_[BoundaryEdge::Bottom]->hv[i];
     }
   }
-}
 
-// Top boundary
-if (boundary_[BoundaryEdge::Top] == BoundaryType::Connect) {
-#pragma omp task
-  {
+  // Top boundary
+  if (boundary_[BoundaryEdge::Top] == BoundaryType::Connect) {
+
     for (int i = 0; i <= nx_ + 1; i++) {
-    h_[i][ny_ + 1]  = neighbour_[BoundaryEdge::Top]->h[i];
-    hu_[i][ny_ + 1] = neighbour_[BoundaryEdge::Top]->hu[i];
-    hv_[i][ny_ + 1] = neighbour_[BoundaryEdge::Top]->hv[i];
+      h_[i][ny_ + 1]  = neighbour_[BoundaryEdge::Top]->h[i];
+      hu_[i][ny_ + 1] = neighbour_[BoundaryEdge::Top]->hu[i];
+      hv_[i][ny_ + 1] = neighbour_[BoundaryEdge::Top]->hv[i];
     }
   }
-}
-}
-
-}
 
 
-
-            // std::cout << "Synchronize ghost layers (for heterogeneous memory) " << std::endl << std::flush;
+  // std::cout << "Synchronize ghost layers (for heterogeneous memory) " << std::endl << std::flush;
   // Synchronize the ghost layers (for BoundaryType::Passive and BoundaryType::Connect conditions) with accelerator
   // memory
   synchGhostLayerAfterWrite();
@@ -462,7 +404,6 @@ void Blocks::Block::computeMaxTimeStep(const RealType dryTol, const RealType cfl
   // Initialize the maximum wave speed
   RealType maximumWaveSpeed = RealType(0.0);
   // Compute the maximum wave speed within the grid
-#pragma omp parallel for collapse(2) reduction(max:maximumWaveSpeed) schedule(static)
   for (int i = 1; i <= nx_; i++) {
     for (int j = 1; j <= ny_; j++) {
       if (h_[i][j] > dryTol) {
@@ -518,65 +459,61 @@ void Blocks::Block::synchBathymetryBeforeRead() {}
 
 void Blocks::Block::synchCopyLayerBeforeRead() {}
 
-void Blocks::Block::setBoundary(const BoundaryEdge& edge, const std::function<void(bool , int , int , int , int )>& updateFunction) {
-  int start;
-  int end;
+void Blocks::Block::setBoundary(const BoundaryEdge& edge, const std::function<void(bool, int, int, int, int)>& updateFunction) {
+  int  start;
+  int  end;
   bool leftRight = false;
   switch (edge) {
-    case BoundaryEdge::Left:
-    case BoundaryEdge::Right:
-        leftRight = true;
-        end = ny_;
-        break;
-    case BoundaryEdge::Top:
-    case BoundaryEdge::Bottom:
-        //inccorect of course, just to understand
-        leftRight = false;
-        end = nx_;
-        break;
+  case BoundaryEdge::Left:
+  case BoundaryEdge::Right:
+    leftRight = true;
+    end       = ny_;
+    break;
+  case BoundaryEdge::Top:
+  case BoundaryEdge::Bottom:
+    // inccorect of course, just to understand
+    leftRight = false;
+    end       = nx_;
+    break;
   }
 
   bool negate = false;
   switch (boundary_[edge]) {
-    case BoundaryType::Wall:
-        negate = true;
-    case BoundaryType::Outflow:
-        #pragma omp parallel
-        {
-            #pragma omp taskloop if(end > 10) grainsize(2) nogroup
-            for (int j = 1; j <= end; j++) {
-       
-                if (leftRight) {
-                  updateFunction(negate, 0, j, nx_, ny_);
-                } else {
-                  updateFunction(negate, j, 0, nx_, ny_);
-                }
-            }
-        }
+  case BoundaryType::Wall:
+    negate = true;
+  case BoundaryType::Outflow:
+    for (int j = 1; j <= end; j++) {
+
+      if (leftRight) {
+        updateFunction(negate, 0, j, nx_, ny_);
+      } else {
+        updateFunction(negate, j, 0, nx_, ny_);
+      }
+    }
+
     break;
 
 
-    case BoundaryType::Connect:
-    case BoundaryType::Passive:
-      break;
-    default:
-      assert(false);
-      break;
+  case BoundaryType::Connect:
+  case BoundaryType::Passive:
+    break;
+  default:
+    assert(false);
+    break;
   }
-
 }
 
 void Blocks::Block::setLeftBoundary() {
   setBoundary(BoundaryEdge::Left, [&](bool negate, int i, int j, int nx_, int ny_) {
     h_[0][j]  = h_[1][j];
-    hu_[0][j] = (negate) ?  -hu_[1][j] : hu_[1][j] ;
+    hu_[0][j] = (negate) ? -hu_[1][j] : hu_[1][j];
     hv_[0][j] = hv_[1][j];
   });
 }
 
 void Blocks::Block::setRightBoundary() {
   setBoundary(BoundaryEdge::Right, [&](bool negate, int i, int j, int nx_, int ny_) {
-    h_[nx_ + 1][j] = h_[nx_][j];
+    h_[nx_ + 1][j]  = h_[nx_][j];
     hu_[nx_ + 1][j] = (negate) ? -hu_[nx_][j] : hu_[nx_][j];
     hv_[nx_ + 1][j] = hv_[nx_][j];
   });
@@ -586,12 +523,12 @@ void Blocks::Block::setBottomBoundary() {
   setBoundary(BoundaryEdge::Bottom, [&](bool negate, int i, int j, int nx_, int ny_) {
     h_[i][0]  = h_[i][1];
     hu_[i][0] = hu_[i][1];
-    hv_[i][0] = (negate) ? -hv_[i][1] :  hv_[i][1] ;
+    hv_[i][0] = (negate) ? -hv_[i][1] : hv_[i][1];
   });
 }
 
 void Blocks::Block::setTopBoundary() {
-  setBoundary(BoundaryEdge::Top, [&](bool negate, int i, int j, int nx_, int ny_ ) {
+  setBoundary(BoundaryEdge::Top, [&](bool negate, int i, int j, int nx_, int ny_) {
     h_[i][ny_ + 1]  = h_[i][ny_];
     hu_[i][ny_ + 1] = hu_[i][ny_];
     hv_[i][ny_ + 1] = (negate) ? -hv_[i][ny_] : hv_[i][ny_];
@@ -601,24 +538,19 @@ void Blocks::Block::setTopBoundary() {
 void Blocks::Block::setBoundaryConditions() {
   // BoundaryType::Connect conditions are set in the calling function setGhostLayer
   // BoundaryType::Passive conditions need to be set by the component using Blocks::Block
-#pragma omp parallel
-  {
-      #pragma omp single
-      {
-        #pragma omp task
-                    setLeftBoundary();
 
-          #pragma omp task
-                    setRightBoundary();
 
-          #pragma omp task
-                    setBottomBoundary();
+  setLeftBoundary();
 
-          #pragma omp task
-                    setTopBoundary();
 
-      }
-  }
+  setRightBoundary();
+
+
+  setBottomBoundary();
+
+
+  setTopBoundary();
+
   /*
    * Set values in corner ghost cells. Required for dimensional splitting and visualization.
    *   The quantities in the corner ghost cells are chosen to generate a zero Riemann solutions

@@ -51,10 +51,8 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
 
    // Thread-local maximum wave speed:
    RealType maxWaveSpeedLocal = RealType(0.0);
-#pragma omp parallel
-   {
+
    // Compute the net-updates for the vertical edges
-#pragma omp for reduction(max : maxWaveSpeed)
    for (int i = 1; i < nx_ + 2; i++) {
      for (int j = 1; j < ny_ + 2; j++) {
        if (j < ny_ + 1) {
@@ -96,7 +94,7 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
        }
      }
 
-   }
+
 
  if (maxWaveSpeed > 0.00001) {
    // Compute the time step width
@@ -112,7 +110,7 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
 
 void Blocks::WaveAccumulationBlock::updateUnknowns(RealType dt) {
  // Update cell averages with the net-updates
-#pragma omp parallel for collapse(2) schedule(static)
+
  for (int i = 1; i < nx_ + 1; i++) {
    for (int j = 1; j < ny_ + 1; j++) {
      h_[i][j] -= dt * hNetUpdates_[i][j];

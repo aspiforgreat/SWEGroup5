@@ -129,7 +129,7 @@ void Blocks::WavePropagationBlock::setBoundaryConditions() {
       //left
       applyBoundaryCondition(BoundaryEdge::Left, i);
       // right
-      applyBoundaryCondition(BoundaryEdge::Right, i)
+      applyBoundaryCondition(BoundaryEdge::Right, i);
    }
 
    end = nx_;
@@ -138,15 +138,14 @@ void Blocks::WavePropagationBlock::setBoundaryConditions() {
       //bottom
       applyBoundaryCondition(BoundaryEdge::Bottom, i);
       // top
-      applyBoundaryCondition(BoundaryEdge::Top, i)
+      applyBoundaryCondition(BoundaryEdge::Top, i);
 
    }
 
-  initializeCornerGhostCells()
+  initializeCornerGhostCells();
 }
 
-
-void applyBoundary(int x, int y, int i, BoundaryEdge edge) {
+void Blocks::WavePropagationBlock::applyBoundary(int x, int y, int i, BoundaryEdge edge) {
   h_[x][y]  = neighbour_[edge]->h[i];
   hu_[x][y] = neighbour_[edge]->hu[i];
   hv_[x][y] = neighbour_[edge]->hv[i];
@@ -157,8 +156,16 @@ void Blocks::WavePropagationBlock::setGhostLayer() {
   // std::cout << "Set simple boundary conditions " << std::endl << std::flush;
   // Call to virtual function to set ghost layer values
 
+
+
   // merged into this function
  // setBoundaryConditions();
+/*
+
+  BoundaryType leftBoundary = boundary_[BoundaryEdge::Left];
+  BoundaryType rightBoundary = boundary_[BoundaryEdge::Right];
+  BoundaryType topBoundary = boundary_[BoundaryEdge::Top];
+  BoundaryType bottomBoundary = boundary_[BoundaryEdge::Bottom];
 
   bool left = leftBoundary == BoundaryType::Connect;
   bool right = rightBoundary == BoundaryType::Connect;
@@ -167,20 +174,14 @@ void Blocks::WavePropagationBlock::setGhostLayer() {
 
   int end = std::max(nx_, ny_) + 1;
 
+  bool initCorners = true;
+
   for (int i = 0; i <= end; i++) {
       if (i < ny_ && i > 0) {
         // Left
         applyBoundaryCondition(BoundaryEdge::Left, i);
         // Right
         applyBoundaryCondition(BoundaryEdge::Right, i);
-      }
-      // setting left ghost layer
-      if (left && i <= ny_ + 1 ) {
-        applyBoundary(0, i, i, BoundaryEdge::Left);
-      }
-      // setting right ghost layer
-      if (right && i <= ny_ + 1 ) {
-        applyBoundary(nx_ + 1, i, i, BoundaryEdge::Right);
       }
 
       if (i < nx_ && i > 0) {
@@ -189,6 +190,21 @@ void Blocks::WavePropagationBlock::setGhostLayer() {
         // Top
         applyBoundaryCondition(BoundaryEdge::Top, i);
       }
+
+      if(initCorners){
+        initializeCornerGhostCells();
+          initCorners = false;
+      }
+
+      // setting left ghost layer
+      if (left && i <= ny_ + 1 ) {
+        applyBoundary(0, i, i, BoundaryEdge::Left);
+      }
+      // setting right ghost layer
+      if (right && i <= ny_+ 1 ) {
+        applyBoundary(nx_ + 1, i, i, BoundaryEdge::Right);
+      }
+
       // setting bottom ghost layer
       if (bottom && i <= nx_+1 ) {
         applyBoundary(i, 0, i, BoundaryEdge::Bottom);
@@ -199,37 +215,11 @@ void Blocks::WavePropagationBlock::setGhostLayer() {
       }
   }
 
-
-    // initialize corner ghost cells if they havent been set by the ghost layer
-    if (!left && !bottom) {
-      h_[0][0]  = h_[1][1];
-      hu_[0][0] = hu_[1][1];
-      hv_[0][0] = hv_[1][1];
-    }
-
-    if (!left && !top) {
-      h_[0][ny_ + 1]  = h_[1][ny_];
-      hu_[0][ny_ + 1] = hu_[1][ny_];
-      hv_[0][ny_ + 1] = hv_[1][ny_];
-    }
-
-    if (!right && !bottom) {
-      h_[nx_ + 1][0]  = h_[nx_][1];
-      hu_[nx_ + 1][0] = hu_[nx_][1];
-      hv_[nx_ + 1][0] = hv_[nx_][1];
-    }
-
-    if (!right && !top) {
-      h_[nx_ + 1][ny_ + 1]  = h_[nx_][ny_];
-      hu_[nx_ + 1][ny_ + 1] = hu_[nx_][ny_];
-      hv_[nx_ + 1][ny_ + 1] = hv_[nx_][ny_];
-    }
-
-
+*/
 }
 
-void computeVerticalEdgeUpdates(int i, int j, RealType& maxWaveSpeed) {
-  if (j < ny_ + 1) {
+void Blocks::WavePropagationBlock::computeVerticalEdgeUpdates(int i, int j, RealType& maxWaveSpeed) {
+  if (j < ny_ + 1 && j > 0) {
     RealType maxEdgeSpeed = RealType(0.0);
     wavePropagationSolver_.computeNetUpdates(
       h_[i - 1][j],
@@ -250,8 +240,8 @@ void computeVerticalEdgeUpdates(int i, int j, RealType& maxWaveSpeed) {
   }
 }
 
-void computeHorizontalEdgeUpdates(int i, int j, RealType& maxWaveSpeed) {
-  if (i < nx_ + 1) {
+void Blocks::WavePropagationBlock::computeHorizontalEdgeUpdates(int i, int j, RealType& maxWaveSpeed) {
+  if (i < nx_ + 1 && i > 0) {
     RealType maxEdgeSpeed = RealType(0.0);
     wavePropagationSolver_.computeNetUpdates(
       h_[i][j - 1],
@@ -274,14 +264,65 @@ void computeHorizontalEdgeUpdates(int i, int j, RealType& maxWaveSpeed) {
 
 void Blocks::WavePropagationBlock::computeNumericalFluxes() {
 
+  BoundaryType leftBoundary = boundary_[BoundaryEdge::Left];
+  BoundaryType rightBoundary = boundary_[BoundaryEdge::Right];
+  BoundaryType topBoundary = boundary_[BoundaryEdge::Top];
+  BoundaryType bottomBoundary = boundary_[BoundaryEdge::Bottom];
 
+  bool left = leftBoundary == BoundaryType::Connect;
+  bool right = rightBoundary == BoundaryType::Connect;
+  bool top = topBoundary == BoundaryType::Connect;
+  bool bottom = bottomBoundary == BoundaryType::Connect;
+
+  bool initCorners = true;
+  bool settingBoundaries = true;
 
  // Maximum (linearized) wave speed within one iteration
  RealType maxWaveSpeed = RealType(0.0);
 
  // Compute the net-updates for the vertical edges
  for (int i = 1; i < nx_ + 2; i++) {
-    for (int j = 1; j < ny_ + 2; ++j) {
+    for (int j = 0; j < ny_ + 2; ++j) {
+      if (settingBoundaries) {
+        if (i < ny_ && i > 0) {
+          // Left
+          applyBoundaryCondition(BoundaryEdge::Left, i);
+          // Right
+          applyBoundaryCondition(BoundaryEdge::Right, i);
+        }
+
+        if (i < nx_ && i > 0) {
+          // Bottom
+          applyBoundaryCondition(BoundaryEdge::Bottom, i);
+          // Top
+          applyBoundaryCondition(BoundaryEdge::Top, i);
+        }
+
+        if(initCorners){
+          initializeCornerGhostCells();
+            initCorners = false;
+        }
+
+        // setting left ghost layer
+        if (left && i <= ny_ + 1 ) {
+          applyBoundary(0, i, i, BoundaryEdge::Left);
+        }
+        // setting right ghost layer
+        if (right && i <= ny_+ 1 ) {
+          applyBoundary(nx_ + 1, i, i, BoundaryEdge::Right);
+        }
+
+        // setting bottom ghost layer
+        if (bottom && i <= nx_+1 ) {
+          applyBoundary(i, 0, i, BoundaryEdge::Bottom);
+        }
+        //  setting top ghost layer
+        if (top && i <= nx_+1) {
+          applyBoundary(i, ny_ + 1, i, BoundaryEdge::Top);
+        }
+        settingBoundaries = false;
+      }
+
       computeVerticalEdgeUpdates(i, j, maxWaveSpeed);
       // Compute the net-updates for the horizontal edges
       computeHorizontalEdgeUpdates(i, j, maxWaveSpeed);

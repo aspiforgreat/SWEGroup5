@@ -352,7 +352,7 @@ int main(int argc, char** argv) {
       Tools::Logger::logger.resetClockToCurrentTime("CPU");
 
       // Set values in ghost cells
-      waveBlock->setGhostLayer();
+     // waveBlock->setGhostLayer();
 
       // Compute numerical flux on each edge
       waveBlock->computeNumericalFluxes();

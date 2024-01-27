@@ -154,14 +154,15 @@ namespace Blocks {
      * - derived classes need to transfer ghost layers
      */
     virtual void setBoundaryConditions();
-    void setBoundary(const BoundaryEdge& edge, const std::function<void(bool, int, int, int, int)>& updateFunction);
-    void setLeftBoundary();
-    void setRightBoundary();
-    void setBottomBoundary();
-    void setTopBoundary();
+
+    void applyBoundary(int x, int y, int i, BoundaryEdge edge);
+    void applyBoundaryCondition(BoundaryEdge edge, int i);
+    void Blocks::WavePropagationBlock::computeHorizontalEdgeUpdates(int i, int j, RealType& maxWaveSpeed);
+    void Blocks::WavePropagationBlock::computeVerticalEdgeUpdates(int i, int j, RealType& maxWaveSpeed);
+    void Blocks::WavePropagationBlock::initializeCornerGhostCells();
 
 
-    /**
+      /**
      * Compute net updates for the block.
      * The member variable #maxTimestep will be updated with the
      * maximum allowed time step size

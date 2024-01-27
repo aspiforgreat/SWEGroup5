@@ -215,14 +215,7 @@ namespace Blocks {
     virtual void synchBathymetryBeforeRead();
     virtual void synchCopyLayerBeforeRead();
 
-    /// Sets boundary conditions in ghost layers (set boundary conditions)
-    /**
-     * Sets the values of all ghost cells depending on the specifed
-     * boundary conditions
-     * - set boundary conditions for types BoundaryType::Wall and BoundaryType::Outflow
-     * - derived classes need to transfer ghost layers
-     */
-    virtual void setBoundaryConditions();
+
 
   public:
     /**
@@ -300,11 +293,6 @@ namespace Blocks {
      * BoundaryType::Wall or BoundaryType::Outflow).
      */
     void setBoundaryType(BoundaryEdge edge, BoundaryType boundaryType, const Block1D* inflow = nullptr);
-    void setBoundary(const BoundaryEdge& edge, const std::function<void(bool, int, int, int, int)>& updateFunction);
-    void setLeftBoundary();
-    void setRightBoundary();
-    void setBottomBoundary();
-    void setTopBoundary();
 
     /// Returns a pointer to proxy class to access the copy layer
     /**
@@ -326,13 +314,7 @@ namespace Blocks {
      */
     virtual Block1D* grabGhostLayer(BoundaryEdge edge);
 
-    /**
-     * Sets the values of all ghost cells depending on the specifed
-     * boundary conditions;
-     * if the ghost layer replicates the variables of a remote Blocks::Block,
-     * the values are copied.
-     */
-    void setGhostLayer();
+    virtual void setGhostLayer() = 0 ;
 
     /**
      * Computes the largest allowed time step for the current grid block

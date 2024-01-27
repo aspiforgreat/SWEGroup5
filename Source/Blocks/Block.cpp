@@ -31,7 +31,7 @@
 
 #if !defined(ENABLE_CUDA)
 #if defined(WITH_SOLVER_FWAVE) || defined(WITH_SOLVER_AUGRIE) || defined(WITH_SOLVER_HLLE)
-#include "WaveAccumulationBlock.hpp"
+//#include "WaveAccumulationBlock.hpp"
 #include "WavePropagationBlock.hpp"
 #elif defined(WITH_SOLVER_RUSANOV)
 #include "Rusanov/RusanovBlock.hpp"
@@ -253,7 +253,7 @@ void Blocks::Block::simulateTimeStep(RealType dt) {
 RealType Blocks::Block::simulate(RealType tStart, RealType tEnd) {
  RealType t = tStart;
  do {
-   setGhostLayer();
+   //setGhostLayer();
 
    computeNumericalFluxes();
    updateUnknowns(maxTimeStep_);
@@ -337,65 +337,7 @@ Blocks::Block1D* Blocks::Block::grabGhostLayer(BoundaryEdge edge) {
  return nullptr;
 }
 
-// this is the function that calls all the other functions
-void Blocks::Block::setGhostLayer() {
- // std::cout << "Set simple boundary conditions " << std::endl << std::flush;
- // Call to virtual function to set ghost layer values
 
- setBoundaryConditions();
-
- // For a BoundaryType::Connect boundary, data will be copied from a neighbouring
- // Blocks::Block (via a Blocks::Block1D proxy object)
- // These copy operations cannot be executed in GPU/accelerator memory, e.g.,
- // setBoundaryConditions then has to take care that values are copied.
-
- // std::cout << "Set BoundaryType::Connect boundary conditions in main memory " << std::endl << std::flush;
-
-
- // Left boundary
- if (boundary_[BoundaryEdge::Left] == BoundaryType::Connect) {
-   for (int j = 0; j <= ny_ + 1; j++) {
-     h_[0][j]  = neighbour_[BoundaryEdge::Left]->h[j];
-     hu_[0][j] = neighbour_[BoundaryEdge::Left]->hu[j];
-     hv_[0][j] = neighbour_[BoundaryEdge::Left]->hv[j];
-   }
- }
-
- // Right boundary
- if (boundary_[BoundaryEdge::Right] == BoundaryType::Connect) {
-
-   for (int j = 0; j <= ny_ + 1; j++) {
-     h_[nx_ + 1][j]  = neighbour_[BoundaryEdge::Right]->h[j];
-     hu_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hu[j];
-     hv_[nx_ + 1][j] = neighbour_[BoundaryEdge::Right]->hv[j];
-   }
- }
-
- // Bottom boundary
- if (boundary_[BoundaryEdge::Bottom] == BoundaryType::Connect) {
-   for (int i = 0; i <= nx_ + 1; i++) {
-     h_[i][0]  = neighbour_[BoundaryEdge::Bottom]->h[i];
-     hu_[i][0] = neighbour_[BoundaryEdge::Bottom]->hu[i];
-     hv_[i][0] = neighbour_[BoundaryEdge::Bottom]->hv[i];
-   }
- }
-
- // Top boundary
- if (boundary_[BoundaryEdge::Top] == BoundaryType::Connect) {
-
-   for (int i = 0; i <= nx_ + 1; i++) {
-     h_[i][ny_ + 1]  = neighbour_[BoundaryEdge::Top]->h[i];
-     hu_[i][ny_ + 1] = neighbour_[BoundaryEdge::Top]->hu[i];
-     hv_[i][ny_ + 1] = neighbour_[BoundaryEdge::Top]->hv[i];
-   }
- }
-
-
- // std::cout << "Synchronize ghost layers (for heterogeneous memory) " << std::endl << std::flush;
- // Synchronize the ghost layers (for BoundaryType::Passive and BoundaryType::Connect conditions) with accelerator
- // memory
- synchGhostLayerAfterWrite();
-}
 
 
 void Blocks::Block::computeMaxTimeStep(const RealType dryTol, const RealType cfl) {
@@ -457,140 +399,6 @@ void Blocks::Block::synchBathymetryBeforeRead() {}
 
 void Blocks::Block::synchCopyLayerBeforeRead() {}
 
-void Blocks::Block::setBoundary(const BoundaryEdge& edge, const std::function<void(bool, int, int, int, int)>& updateFunction) {
- int  start;
- int  end;
- bool leftRight = false;
- switch (edge) {
- case BoundaryEdge::Left:
- case BoundaryEdge::Right:
-   leftRight = true;
-   end       = ny_;
-   break;
- case BoundaryEdge::Top:
- case BoundaryEdge::Bottom:
-   // inccorect of course, just to understand
-   leftRight = false;
-   end       = nx_;
-   break;
- }
-
- bool negate = false;
- switch (boundary_[edge]) {
- case BoundaryType::Wall:
-   negate = true;
- case BoundaryType::Outflow:
-   for (int j = 1; j <= end; j++) {
-
-     if (leftRight) {
-       updateFunction(negate, 0, j, nx_, ny_);
-     } else {
-       updateFunction(negate, j, 0, nx_, ny_);
-     }
-   }
-
-   break;
-
-
- case BoundaryType::Connect:
- case BoundaryType::Passive:
-   break;
- default:
-   assert(false);
-   break;
- }
-}
-
-void Blocks::Block::setLeftBoundary() {
- setBoundary(BoundaryEdge::Left, [&](bool negate, int i, int j, int nx_, int ny_) {
-   h_[0][j]  = h_[1][j];
-   hu_[0][j] = (negate) ? -hu_[1][j] : hu_[1][j];
-   hv_[0][j] = hv_[1][j];
- });
-}
-
-void Blocks::Block::setRightBoundary() {
- setBoundary(BoundaryEdge::Right, [&](bool negate, int i, int j, int nx_, int ny_) {
-   h_[nx_ + 1][j]  = h_[nx_][j];
-   hu_[nx_ + 1][j] = (negate) ? -hu_[nx_][j] : hu_[nx_][j];
-   hv_[nx_ + 1][j] = hv_[nx_][j];
- });
-}
-
-void Blocks::Block::setBottomBoundary() {
- setBoundary(BoundaryEdge::Bottom, [&](bool negate, int i, int j, int nx_, int ny_) {
-   h_[i][0]  = h_[i][1];
-   hu_[i][0] = hu_[i][1];
-   hv_[i][0] = (negate) ? -hv_[i][1] : hv_[i][1];
- });
-}
-
-void Blocks::Block::setTopBoundary() {
- setBoundary(BoundaryEdge::Top, [&](bool negate, int i, int j, int nx_, int ny_) {
-   h_[i][ny_ + 1]  = h_[i][ny_];
-   hu_[i][ny_ + 1] = hu_[i][ny_];
-   hv_[i][ny_ + 1] = (negate) ? -hv_[i][ny_] : hv_[i][ny_];
- });
-}
-
-void Blocks::Block::setBoundaryConditions() {
- // BoundaryType::Connect conditions are set in the calling function setGhostLayer
- // BoundaryType::Passive conditions need to be set by the component using Blocks::Block
-
-
- setLeftBoundary();
-
-
- setRightBoundary();
-
-
- setBottomBoundary();
-
-
- setTopBoundary();
-
- /*
-  * Set values in corner ghost cells. Required for dimensional splitting and visualization.
-  *   The quantities in the corner ghost cells are chosen to generate a zero Riemann solutions
-  *   (steady state) with the neighboring cells. For the lower left corner (0,0) using
-  *   the values of (1,1) generates a steady state (zero) Riemann problem for (0,0) - (0,1) and
-  *   (0,0) - (1,0) for both outflow and reflecting boundary conditions.
-  *
-  *   Remark: Unsplit methods don't need corner values.
-  *
-  * Sketch (reflecting boundary conditions, lower left corner):
-  * <pre>
-  *                  **************************
-  *                  *  _    _    *  _    _   *
-  *  Ghost           * |  h   |   * |  h   |  *
-  *  cell    ------> * | -hu  |   * |  hu  |  * <------ Cell (1,1) inside the domain
-  *  (0,1)           * |_ hv _|   * |_ hv _|  *
-  *                  *            *           *
-  *                  **************************
-  *                  *  _    _    *  _    _   *
-  *   Corner Ghost   * |  h   |   * |  h   |  *
-  *   cell   ------> * |  hu  |   * |  hu  |  * <----- Ghost cell (1,0)
-  *   (0,0)          * |_ hv _|   * |_-hv _|  *
-  *                  *            *           *
-  *                  **************************
-  * </pre>
-  */
- h_[0][0]  = h_[1][1];
- hu_[0][0] = hu_[1][1];
- hv_[0][0] = hv_[1][1];
-
- h_[0][ny_ + 1]  = h_[1][ny_];
- hu_[0][ny_ + 1] = hu_[1][ny_];
- hv_[0][ny_ + 1] = hv_[1][ny_];
-
- h_[nx_ + 1][0]  = h_[nx_][1];
- hu_[nx_ + 1][0] = hu_[nx_][1];
- hv_[nx_ + 1][0] = hv_[nx_][1];
-
- h_[nx_ + 1][ny_ + 1]  = h_[nx_][ny_];
- hu_[nx_ + 1][ny_ + 1] = hu_[nx_][ny_];
- hv_[nx_ + 1][ny_ + 1] = hv_[nx_][ny_];
-}
 
 int Blocks::Block::getNx() const { return nx_; }
 

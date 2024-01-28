@@ -70,7 +70,7 @@ if(ENABLE_VECTORIZATION)
     target_compile_definitions(${META_PROJECT_NAME} PUBLIC ENABLE_VECTORIZATION)
 endif()
 
-option(ENABLE_NETCDF "Enable output writing with NetCDF." ON)
+option(ENABLE_NETCDF "Enable output writing with NetCDF." OFF)
 if(ENABLE_NETCDF)
     if(NOT MSVC)
         set(NETCDF_CXX "YES")

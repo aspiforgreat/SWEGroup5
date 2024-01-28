@@ -314,7 +314,12 @@ namespace Blocks {
      */
     virtual Block1D* grabGhostLayer(BoundaryEdge edge);
 
-    virtual void setGhostLayer() = 0 ;
+    void setGhostLayer()  ;
+    virtual void setBoundaryConditions();
+
+    void applyBoundary(int x, int y, int i, BoundaryEdge edge);
+    void applyBoundaryCondition(BoundaryEdge edge, int i);
+    void initializeCornerGhostCells();
 
     /**
      * Computes the largest allowed time step for the current grid block

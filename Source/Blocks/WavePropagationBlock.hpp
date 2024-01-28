@@ -140,25 +140,6 @@ namespace Blocks {
     ~WavePropagationBlock() override = default;
 
     /**
-     * Sets the values of all ghost cells depending on the specifed
-     * boundary conditions;
-     * if the ghost layer replicates the variables of a remote Blocks::Block,
-     * the values are copied.
-     */
-
-    /// Sets boundary conditions in ghost layers (set boundary conditions)
-    /**
-     * Sets the values of all ghost cells depending on the specifed
-     * boundary conditions
-     * - set boundary conditions for types BoundaryType::Wall and BoundaryType::Outflow
-     * - derived classes need to transfer ghost layers
-     */
-
-    void Blocks::WavePropagationBlock::computeHorizontalEdgeUpdates(int i, int j, RealType& maxWaveSpeed);
-    void Blocks::WavePropagationBlock::computeVerticalEdgeUpdates(int i, int j, RealType& maxWaveSpeed);
-
-
-      /**
      * Compute net updates for the block.
      * The member variable #maxTimestep will be updated with the
      * maximum allowed time step size

@@ -1,38 +1,38 @@
 /**
-* @file
-* This file is part of SWE.
-*
-* @author Alexander Breuer (breuera AT in.tum.de, http://www5.in.tum.de/wiki/index.php/Dipl.-Math._Alexander_Breuer)
-* @author Sebastian Rettenberger (rettenbs AT in.tum.de,
-* http://www5.in.tum.de/wiki/index.php/Sebastian_Rettenberger,_M.Sc.)
-* @author Michael Bader (bader AT in.tum.de, http://www5.in.tum.de/wiki/index.php/Michael_Bader)
-*
-* @section LICENSE
-*
-* SWE is free software: you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* SWE is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with SWE.  If not, see <http://www.gnu.org/licenses/>.
-*
-*
-* @section DESCRIPTION
-*
-* Blocks::Block, which uses solvers in the wave propagation formulation.
+ * @file
+ * This file is part of SWE.
+ *
+ * @author Alexander Breuer (breuera AT in.tum.de, http://www5.in.tum.de/wiki/index.php/Dipl.-Math._Alexander_Breuer)
+ * @author Sebastian Rettenberger (rettenbs AT in.tum.de,
+ * http://www5.in.tum.de/wiki/index.php/Sebastian_Rettenberger,_M.Sc.)
+ * @author Michael Bader (bader AT in.tum.de, http://www5.in.tum.de/wiki/index.php/Michael_Bader)
+ *
+ * @section LICENSE
+ *
+ * SWE is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * SWE is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with SWE.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *
+ * @section DESCRIPTION
+ *
+ * Blocks::Block, which uses solvers in the wave propagation formulation.
  */
 
 #include "WaveAccumulationBlock.hpp"
 
-
+#ifdef ENABLE_OPENMP
 #include <omp.h>
-
+#endif
 
 #include <iostream>
 
@@ -49,13 +49,26 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
   // Maximum (linearized) wave speed within one iteration
   RealType maxWaveSpeed = RealType(0.0);
 
-  // Thread-local maximum wave speed:
-  RealType maxWaveSpeedLocal = RealType(0.0);
+#ifdef ENABLE_OPENMP
+#pragma omp parallel
+  {
+    // Thread-local maximum wave speed:
+    RealType maxWaveSpeedLocal = RealType(0.0);
 
-  // Compute the net-updates for the vertical edges
-  for (int i = 1; i < nx_ + 2; i++) {
-    for (int j = 1; j < ny_ + 2; j++) {
-      if (j < ny_ + 1) {
+    // Use OpenMP for the outer loop
+#pragma omp for
+#endif
+    // Compute the net-updates for the vertical edges
+    for (int i = 1; i < nx_ + 2; i++) {
+      const int nyEnd = ny_ + 1; // Compiler might refuse to vectorize j-loop without this ...
+#if defined(ENABLE_VECTORIZATION) && defined(ENABLE_OPENMP) // Vectorize the inner loop
+#pragma omp simd reduction(max : maxWaveSpeedLocal)
+#elif defined(ENABLE_OPENMP)
+#pragma omp reduction(max : maxWaveSpeedLocal)
+#elif defined(ENABLE_VECTORIZATION)
+#pragma omp simd reduction(max : maxWaveSpeed)
+#endif
+      for (int j = 1; j < nyEnd; j++) {
         RealType maxEdgeSpeed = RealType(0.0);
         RealType hNetUpLeft = 0.0, hNetUpRight = 0.0;
         RealType huNetUpLeft = 0.0, huNetUpRight = 0.0;
@@ -64,7 +77,8 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
           h_[i][j],
           hu_[i - 1][j],
           hu_[i][j],
-          b_[i - 1][j], b_[i][j],
+          b_[i - 1][j],
+          b_[i][j],
           hNetUpLeft,
           hNetUpRight,
           huNetUpLeft,
@@ -78,14 +92,30 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
         hNetUpdates_[i][j] += dxInv * hNetUpRight;
         huNetUpdates_[i][j] += dxInv * huNetUpRight;
 
-
-        // Update the maximum wave speed
-        maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed);
+#ifdef ENABLE_OPENMP
+        // Update the thread-local maximum wave speed
+        maxWaveSpeedLocal = std::max(maxWaveSpeed, maxEdgeSpeed);
+#else
+      // Update the maximum wave speed
+      maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed);
+#endif
       }
-      // Compute the net-updates for the horizontal edges
+    }
 
-      if (i < nx_ + 1) {
-        // printf("Hello from waveAcc %d\n", omp_get_thread_num());
+#ifdef ENABLE_OPENMP
+#pragma omp for
+#endif
+    // Compute the net-updates for the horizontal edges
+    for (int i = 1; i < nx_ + 1; i++) {
+      const int nyEnd = ny_ + 2;
+#if defined(ENABLE_VECTORIZATION) && defined(ENABLE_OPENMP)
+#pragma omp simd reduction(max : maxWaveSpeedLocal)
+#elif defined(ENABLE_OPENMP)
+#pragma omp reduction(max : maxWaveSpeedLocal)
+#elif defined(ENABLE_VECTORIZATION)
+#pragma omp simd reduction(max : maxWaveSpeed)
+#endif
+      for (int j = 1; j < nyEnd; j++) {
         RealType maxEdgeSpeed = 0.0;
         RealType hNetUpDow = 0.0, hNetUpUpw = 0.0;
         RealType hvNetUpDow = 0.0, hvNetUpUpw = 0.0;
@@ -102,18 +132,29 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
           hvNetUpUpw,
           maxEdgeSpeed
         );
+
         // Accumulate net updates to cell-wise net updates for h and hu
         hNetUpdates_[i][j - 1] += dyInv * hNetUpDow;
         hvNetUpdates_[i][j - 1] += dyInv * hvNetUpDow;
         hNetUpdates_[i][j] += dyInv * hNetUpUpw;
         hvNetUpdates_[i][j] += dyInv * hvNetUpUpw;
+
+#ifdef ENABLE_OPENMP
         // Update the thread-local maximum wave speed
-        maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed);
+        maxWaveSpeedLocal = std::max(maxWaveSpeed, maxEdgeSpeed);
+#else
+      // Update the maximum wave speed
+      maxWaveSpeed = std::max(maxWaveSpeed, maxEdgeSpeed);
+#endif
       }
     }
-  }
 
+#ifdef ENABLE_OPENMP
+#pragma omp critical
+    { maxWaveSpeed = std::max(maxWaveSpeedLocal, maxWaveSpeed); }
 
+  } // #pragma omp parallel
+#endif
 
   if (maxWaveSpeed > 0.00001) {
     // Compute the time step width
@@ -130,8 +171,16 @@ void Blocks::WaveAccumulationBlock::computeNumericalFluxes() {
 void Blocks::WaveAccumulationBlock::updateUnknowns(RealType dt) {
   // Update cell averages with the net-updates
 
+#ifdef SWE_USE_OPENMP
+#pragma omp parallel for
+#endif
   for (int i = 1; i < nx_ + 1; i++) {
-    for (int j = 1; j < ny_ + 1; j++) {
+    const int nyEnd = ny_ + 1;
+#ifdef ENABLE_VECTORIZATION
+    // Tell the compiler that he can safely ignore all dependencies in this loop
+#pragma omp simd
+#endif
+    for (int j = 1; j < nyEnd; j++) {
       h_[i][j] -= dt * hNetUpdates_[i][j];
       hu_[i][j] -= dt * huNetUpdates_[i][j];
       hv_[i][j] -= dt * hvNetUpdates_[i][j];

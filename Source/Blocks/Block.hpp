@@ -314,7 +314,7 @@ namespace Blocks {
      */
     virtual Block1D* grabGhostLayer(BoundaryEdge edge);
 
-    virtual void setGhostLayer() = 0 ;
+    // void setGhostLayer();
 
     /**
      * Computes the largest allowed time step for the current grid block

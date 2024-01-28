@@ -145,21 +145,17 @@ namespace Blocks {
      * if the ghost layer replicates the variables of a remote Blocks::Block,
      * the values are copied.
      */
-    void setGhostLayer() override;
-    /// Sets boundary conditions in ghost layers (set boundary conditions)
+//host layers (set boundary conditions)
     /**
      * Sets the values of all ghost cells depending on the specifed
      * boundary conditions
      * - set boundary conditions for types BoundaryType::Wall and BoundaryType::Outflow
      * - derived classes need to transfer ghost layers
      */
-    virtual void setBoundaryConditions();
 
     void applyBoundary(int x, int y, int i, BoundaryEdge edge);
     void applyBoundaryCondition(BoundaryEdge edge, int i);
-    void Blocks::WavePropagationBlock::computeHorizontalEdgeUpdates(int i, int j, RealType& maxWaveSpeed);
-    void Blocks::WavePropagationBlock::computeVerticalEdgeUpdates(int i, int j, RealType& maxWaveSpeed);
-    void Blocks::WavePropagationBlock::initializeCornerGhostCells();
+    void initializeCornerGhostCells();
 
 
       /**

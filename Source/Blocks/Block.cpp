@@ -517,6 +517,9 @@ void Blocks::Block::setGhostLayer() {
 
  bool initCorners = true;
 
+#pragma omp parallel
+#pragma omp single
+#pragma omp taskloop grainsize(10)
  for (int i = 0; i <= end; i++) {
    if (i < ny_ && i > 0) {
      // Left
